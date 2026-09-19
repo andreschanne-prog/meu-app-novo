@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --mishh-orange: #FF6B00;
+  --mishh-bg: #000000;
+  --mishh-fg: #ffffff;
+  --mishh-dim: #a8a8a8;
+  --mishh-ink: #0a0a0a;
+  --mishh-card: #262626;
+}
+
+* { box-sizing: border-box; }
+
+/* Reset global de bordas para o visual borderless */
+*, *::before, *::after {
+  border-color: transparent;
+}
+
+html, body {
+  background: var(--mishh-bg);
+  color: var(--mishh-fg);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+img, video { max-width: 100%; height: auto; }
+
+/* Evita zoom automático do iOS ao focar inputs (font < 16px) */
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select { font-size: 16px; }
+}
+
+/* Inputs no estilo MISHH: sem borda, sem outline, fundo escuro sutil */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input[type="tel"],
+input[type="number"],
+textarea,
+select {
+  background-color: var(--mishh-ink);
+  color: var(--mishh-fg);
+  border: none !important;
+  outline: none;
+}
+input::placeholder, textarea::placeholder { color: var(--mishh-dim); opacity: 1; }
+input:focus, textarea:focus, select:focus { outline: none; }
+select option { background: var(--mishh-ink); color: var(--mishh-fg); }
+
+/* Botões nativos sem estilo padrão que adicionaria borda */
+button { outline: none; }
+button:focus, button:focus-visible { outline: none; }
+
+/* Esconder scrollbar do carrossel */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Snap horizontal suave para carrosséis (stories) */
+.snap-x-mandatory { scroll-snap-type: x mandatory; }
+.snap-start { scroll-snap-align: start; }
+.snap-center { scroll-snap-align: center; }
+
+/* Filtros MISHH */
+.filter-normal { filter: none; }
+.filter-bw { filter: grayscale(100%); }
+.filter-sepia { filter: sepia(80%); }
+.filter-vintage { filter: sepia(40%) contrast(110%) saturate(120%) brightness(95%); }
+.filter-vibrant { filter: saturate(180%) contrast(110%); }
+.filter-soft { filter: brightness(105%) saturate(85%) blur(0.3px); }
+.filter-contrast { filter: contrast(160%) saturate(130%); }
+.filter-blur { filter: blur(3px); }
+
+/* Animações sutis */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fade-in { animation: fadeIn .25s ease-out; }
+
+@keyframes pulse-orange {
+  0%,100% { box-shadow: 0 0 0 0 rgba(255,107,0,.4); }
+  50% { box-shadow: 0 0 0 8px rgba(255,107,0,0); }
+}
+.pulse-orange { animation: pulse-orange 1.6s infinite; }
+
+/* Utilidades extras */
+@layer utilities {
+  .pb-safe { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+  .text-fluid-xs { font-size: clamp(0.75rem, 2vw, 0.875rem); }
+  .text-fluid-sm { font-size: clamp(0.875rem, 2.5vw, 1rem); }
+  .text-fluid-base { font-size: clamp(1rem, 3vw, 1.125rem); }
+  .text-fluid-lg { font-size: clamp(1.125rem, 3.5vw, 1.25rem); }
+  .text-fluid-xl { font-size: clamp(1.25rem, 4vw, 1.5rem); }
+  .text-fluid-2xl { font-size: clamp(1.5rem, 5vw, 2rem); }
+
+  /* Toasts em dark mode */
+  .react-hot-toast > div {
+    background: #0a0a0a !important;
+    color: #ffffff !important;
+    border: none !important;
+  }
+}
