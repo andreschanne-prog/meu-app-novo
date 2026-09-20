@@ -17,8 +17,8 @@ type Comment = { id: string; post_id: string; user_id: string; text: string; cre
 type Post = {
   id: string;
   user_id: string;
-  image_url?: string | null;
-  images?: string[] | null; // NOVO - carrossel com fotos já ajustadas
+  image_url?: string | string[] | null;
+  images?: string[] | string | null;
   filter?: string;
   caption?: string;
   created_at: string;
@@ -64,8 +64,26 @@ export default function PostCard({ post }: { post: Post }) {
   const [showLikers, setShowLikers] = useState(false); const [likers, setLikers] = useState<Liker[]>([]); const [showBlock, setShowBlock] = useState(false)
   const [mentionUsers, setMentionUsers] = useState<ProfileLite[]>([]); const [showMentions, setShowMentions] = useState(false)
 
-  // CARROSSEL
-  const allImages = post.images && post.images.length > 0? post.images : post.image_url? [post.image_url] : []
+  // CORREÇÃO DO ERRO allImages.map - SEMPRE GARANTE ARRAY
+  const allImages: string[] = (() => {
+    const out: string[] = []
+    // @ts-ignore
+    const rawImages = (post as any).images?? post.image_url?? (post as any).media_url?? (post as any).photo_url
+    if (Array.isArray(rawImages)) {
+      out.push(...rawImages.filter(Boolean).flat().map((s:any)=> typeof s === 'string'? s : ''))
+    } else if (typeof rawImages === 'string' && rawImages) {
+      // pode vir como JSON string '["url1","url2"]'
+      try {
+        const parsed = JSON.parse(rawImages)
+        if (Array.isArray(parsed)) out.push(...parsed.filter(Boolean))
+        else out.push(rawImages)
+      } catch {
+        out.push(rawImages)
+      }
+    }
+    return out.filter(Boolean) as string[]
+  })()
+
   const [currentIndex, setCurrentIndex] = useState(0)
   const touchStartX = useRef<number | null>(null)
 
@@ -142,12 +160,11 @@ export default function PostCard({ post }: { post: Post }) {
   async function reportComment(id: string, reason: ReportReason, uid: string) { if (!user) return; await supabase.from('reports').insert({ reporter_id: user.id, reported_user_id: uid, reported_post_id: post.id, reported_comment_id: id, reason, details: '' }); toast.success('Reportado'); setShowReportComment(null) }
 
   const showOnline = isUserOnline(postProfile) &&!postProfile?.verificado
-  // Fotos novas já vêm ajustadas do canvas, não precisa aplicar filtro. Mantém compatível com posts antigos
-  const isOldFilteredPost = post.filter && post.filter!== 'normal' && (!post.images || post.images.length===0)
+  const isOldFilteredPost = post.filter && post.filter!== 'normal' && allImages.length<=1
 
   return (
     <>
-      <article className="bg-[#0a0a0a] rounded-2xl mb-4 overflow-hidden mx-auto w-full max-w-[400px] border border-[#262626]">
+      <article className="bg-[#0a0a0a] rounded-2xl mb-4 overflow-hidden mx-auto w-full max-w- border border-[#262626]">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => router.push('/user/' + post.user_id)} className="flex items-center gap-2.5">
             <div className="relative">
@@ -171,7 +188,6 @@ export default function PostCard({ post }: { post: Post }) {
 
         {allImages.length > 0? (
           <div className="relative w-full aspect-square bg-[#1a1a1a] overflow-hidden group" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-            {/* track */}
             <div className="flex h-full transition-transform duration-300 ease-out" style={{ transform: `translateX(-${currentIndex * 100}%)` }}>
               {allImages.map((url, idx) => (
                 <div key={idx} className="w-full h-full shrink-0">
@@ -187,7 +203,6 @@ export default function PostCard({ post }: { post: Post }) {
               ))}
             </div>
 
-            {/* setas desktop */}
             {allImages.length > 1 && (
               <>
                 {currentIndex > 0 && (
@@ -200,11 +215,9 @@ export default function PostCard({ post }: { post: Post }) {
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 )}
-                {/* contador estilo insta */}
                 <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur text- text-white font-medium">
                   {currentIndex + 1}/{allImages.length}
                 </div>
-                {/* dots */}
                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                   {allImages.map((_, i) => (
                     <div key={i} className={`h-1.5 rounded-full transition-all ${i===currentIndex? 'w-4 bg-white' : 'w-1.5 bg-white/40'}`} />

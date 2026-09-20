@@ -45,7 +45,7 @@ export default function NewPost() {
   }
 
   const updateActivePhoto = (changes: Partial<Photo>) => {
-    setPhotos(prev => prev.map((photo, photoIndex) => photoIndex === index ? { ...photo, ...changes } : photo))
+    setPhotos(prev => prev.map((photo, photoIndex) => photoIndex === index? {...photo,...changes } : photo))
   }
 
   const resetActivePhoto = () => updateActivePhoto({ zoom: 1, offset: { x: 0, y: 0 }, filter: 'none' })
@@ -130,10 +130,36 @@ export default function NewPost() {
       const urls = await Promise.all(blobs.map(async b => {
         const fd = new FormData(); fd.append('file', b); fd.append('upload_preset', UPLOAD_PRESET)
         const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd })
-        const d = await r.json(); return d.secure_url
+        const d = await r.json()
+        if (!d.secure_url) throw new Error('Erro no Cloudinary: ' + JSON.stringify(d))
+        return d.secure_url
       }))
-      const { error } = await supabase.from('posts').insert({ image_url: urls[0], images: urls, caption, filter: active?.filter || 'none', tagged_user_ids: taggedUsers.map(user => user.id) })
-      if (error) throw error
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Você precisa estar logado')
+
+      // Payload com carrossel
+      const payload: any = {
+        user_id: user.id,
+        image_url: urls[0],
+        images: urls,
+        caption,
+        filter: active?.filter || 'none',
+        tagged_user_ids: taggedUsers.map(u => u.id)
+      }
+
+      let { error } = await supabase.from('posts').insert(payload)
+
+      // FALLBACK: se a coluna images ainda não existir, salva só com 1 foto
+      if (error && error.message.includes('images')) {
+        console.warn('Coluna images não existe, salvando só image_url', error)
+        const { images,...fallback } = payload
+        const retry = await supabase.from('posts').insert(fallback)
+        if (retry.error) throw retry.error
+      } else if (error) {
+        throw error
+      }
+
       toast.success('Postado!', { id: tId }); router.push('/feed')
     } catch (e: any) { toast.error(e.message, { id: tId }) } finally { setLoading(false) }
   }
@@ -187,14 +213,14 @@ export default function NewPost() {
             <input value={tagQuery} onChange={e => searchUsers(e.target.value)} placeholder="Marcar pessoas" className="w-full bg-[#121212] border border-white/10 rounded-lg pl-10 pr-3 py-3 text-sm outline-none" />
             {tagResults.length > 0 && <div className="absolute z-10 top-full mt-1 w-full rounded-lg border border-white/10 bg-[#1a1a1a] p-1 shadow-xl">{tagResults.map(profile => <button type="button" key={profile.id} onClick={() => addTaggedUser(profile)} className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-white/10"><img src={profile.avatar_url || ''} alt="" className="h-8 w-8 rounded-full bg-[#333] object-cover" /><span className="text-sm text-white">@{profile.username}</span></button>)}</div>}
           </div>
-          {taggedUsers.length > 0 && <div className="flex flex-wrap gap-2">{taggedUsers.map(user => <span key={user.id} className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs text-white">@{user.username}<button type="button" onClick={() => setTaggedUsers(users => users.filter(item => item.id !== user.id))} aria-label={`Remover @${user.username}`}><X className="h-3 w-3" /></button></span>)}</div>}
-          <button type="button" onClick={() => setShowAdjustments(value => !value)} className="flex items-center gap-2 text-sm text-white"><SlidersHorizontal className="h-4 w-4" /> Ajustar foto</button>
+          {taggedUsers.length > 0 && <div className="flex flex-wrap gap-2">{taggedUsers.map(user => <span key={user.id} className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs text-white">@{user.username}<button type="button" onClick={() => setTaggedUsers(users => users.filter(item => item.id!== user.id))} aria-label={`Remover @${user.username}`}><X className="h-3 w-3" /></button></span>)}</div>}
+          <button type="button" onClick={() => setShowAdjustments(value =>!value)} className="flex items-center gap-2 text-sm text-white"><SlidersHorizontal className="h-4 w-4" /> Ajustar foto</button>
           {showAdjustments && <div className="space-y-4 rounded-lg border border-white/10 bg-[#121212] p-3">
-            <div className="grid grid-cols-5 gap-2">{FILTERS.map(filter => <button type="button" key={filter.label} onClick={() => updateActivePhoto({ filter: filter.css })} className={`space-y-1 text-center text-[10px] ${active.filter === filter.css ? 'text-white' : 'text-zinc-500'}`}><img src={active.preview} alt="" className="aspect-square w-full rounded object-cover" style={{ filter: filter.css }} /><span>{filter.label}</span></button>)}</div>
+            <div className="grid grid-cols-5 gap-2">{FILTERS.map(filter => <button type="button" key={filter.label} onClick={() => updateActivePhoto({ filter: filter.css })} className={`space-y-1 text-center text-[10px] ${active.filter === filter.css? 'text-white' : 'text-zinc-500'}`}><img src={active.preview} alt="" className="aspect-square w-full rounded object-cover" style={{ filter: filter.css }} /><span>{filter.label}</span></button>)}</div>
             <div className="space-y-3 border-t border-white/10 pt-3">
               <label className="block text-xs text-zinc-300">Zoom <span className="float-right text-zinc-500">{active.zoom.toFixed(2)}x</span><input type="range" min="1" max="3" step="0.01" value={active.zoom} onChange={e => updateActivePhoto({ zoom: Number(e.target.value) })} className="mt-2 w-full accent-white" /></label>
-              <label className="block text-xs text-zinc-300">Horizontal <span className="float-right text-zinc-500">{Math.round(active.offset.x)}px</span><input type="range" min="-240" max="240" value={active.offset.x} onChange={e => updateActivePhoto({ offset: { ...active.offset, x: Number(e.target.value) } })} className="mt-2 w-full accent-white" /></label>
-              <label className="block text-xs text-zinc-300">Vertical <span className="float-right text-zinc-500">{Math.round(active.offset.y)}px</span><input type="range" min="-240" max="240" value={active.offset.y} onChange={e => updateActivePhoto({ offset: { ...active.offset, y: Number(e.target.value) } })} className="mt-2 w-full accent-white" /></label>
+              <label className="block text-xs text-zinc-300">Horizontal <span className="float-right text-zinc-500">{Math.round(active.offset.x)}px</span><input type="range" min="-240" max="240" value={active.offset.x} onChange={e => updateActivePhoto({ offset: {...active.offset, x: Number(e.target.value) } })} className="mt-2 w-full accent-white" /></label>
+              <label className="block text-xs text-zinc-300">Vertical <span className="float-right text-zinc-500">{Math.round(active.offset.y)}px</span><input type="range" min="-240" max="240" value={active.offset.y} onChange={e => updateActivePhoto({ offset: {...active.offset, y: Number(e.target.value) } })} className="mt-2 w-full accent-white" /></label>
               <button type="button" onClick={resetActivePhoto} className="text-xs text-zinc-400 underline underline-offset-4 hover:text-white">Restaurar ajustes desta foto</button>
             </div>
           </div>}
@@ -203,7 +229,7 @@ export default function NewPost() {
             <span className="text-xs text-zinc-400">{photos.length}/10 fotos</span>
             {photos.length < 10 && <label className="cursor-pointer rounded-full border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">Adicionar fotos<input type="file" accept="image/*" multiple className="hidden" onChange={e => addFiles(e.target.files)} /></label>}
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">{photos.map((photo, photoIndex) => <button type="button" key={photo.id} onClick={() => setIndex(photoIndex)} aria-label={`Editar foto ${photoIndex + 1}`} className={`relative h-14 w-14 shrink-0 overflow-hidden rounded border-2 ${photoIndex === index ? 'border-white' : 'border-transparent'}`}><img src={photo.preview} alt="" className="h-full w-full object-cover" style={{ filter: photo.filter }} /><span className="absolute bottom-0 right-0 bg-black/70 px-1 text-[9px] text-white">{photoIndex + 1}</span></button>)}</div>
+          <div className="flex gap-2 overflow-x-auto pb-1">{photos.map((photo, photoIndex) => <button type="button" key={photo.id} onClick={() => setIndex(photoIndex)} aria-label={`Editar foto ${photoIndex + 1}`} className={`relative h-14 w-14 shrink-0 overflow-hidden rounded border-2 ${photoIndex === index? 'border-white' : 'border-transparent'}`}><img src={photo.preview} alt="" className="h-full w-full object-cover" style={{ filter: photo.filter }} /><span className="absolute bottom-0 right-0 bg-black/70 px-1 text-[9px] text-white">{photoIndex + 1}</span></button>)}</div>
         </div>
       </div>
     </div>

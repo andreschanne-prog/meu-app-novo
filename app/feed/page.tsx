@@ -217,7 +217,7 @@ export default function FeedPage() {
       <div className="sticky top-0 z-50 -mx-2 sm:mx-0 mb-3 border-b border-[#262626] bg-black/90 backdrop-blur-md">
         <div className={`${CARD_SIZE} flex h-10 items-center justify-between px-3 sm:px-0`}>
           <Link href="/destaques" className="rounded-full bg-[#ff6a00] px-5 py-2 text- font-bold uppercase tracking-wide text-white shadow-[0_0_15px_rgba(255,106,0,0.4)] hover:bg-[#ff7a1a] active:scale-95 transition sm:text-sm">
-            Destaques do MISHH
+            Destaques
           </Link>
           {userCity && <span className="text- text-[#a8a8a8] font-light"> {userCity}</span>}
         </div>

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'MISHH - Rede Social',
   description: 'Todo mês um destaque novo.',
   applicationName: 'MISHH',
-  authors: [{ name: 'MISHH' }],
+  authors: [{ name: 'Revista MISHH' }],
 }
 
 export const viewport: Viewport = {
