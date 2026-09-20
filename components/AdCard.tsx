@@ -90,7 +90,7 @@ export function AdSenseBlock({ className = "" }: { className?: string }) {
     <div className={`flex justify-center w-full mb-4 ${className}`}>
       <div className="bg-[#0a0a0a] overflow-hidden rounded-2xl w-full max-w-[470px] min-h-[300px] border border-[#262626]">
         <div className="bg-[#262626] text-[#a8a8a8] text-[10px] uppercase tracking-widest px-3.5 py-1.5">
-          Anúncio · Google
+          Anúncio 
         </div>
         <div className="flex items-center justify-center bg-black">
           <ins

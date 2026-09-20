@@ -10,9 +10,9 @@ export default function TermsPage() {
       <div className="space-y-7 text-sm text-[#d4d4d4] font-light leading-relaxed">
         
         <section className="border border-red-500/40 bg-red-500/10 p-4 rounded-2xl">
-          <h2 className="text-white font-medium mb-2">1. Plataforma Exclusiva para Maiores de 18 Anos - Art. 104 do Código Civil</h2>
+          <h2 className="text-white font-medium mb-2">1. Plataforma  para Maiores de 18 Anos - Art. 104 do Código Civil</h2>
           <p className="mb-3">
-            O MISHH é uma plataforma <strong className="text-white">EXCLUSIVA PARA MAIORES DE 18 (DEZOITO) ANOS.</strong> Ao criar conta você declara, sob as penas da lei (art. 299 do Código Penal - falsidade ideológica), que possui 18 anos completos ou mais na data do cadastro.
+            O MISHH é uma plataforma <strong className="text-white"> PARA MAIORES DE 18 (DEZOITO) ANOS.</strong> Ao criar conta você declara, sob as penas da lei (art. 299 do Código Penal - falsidade ideológica), que possui 18 anos completos ou mais na data do cadastro.
           </p>
           <ul className="list-disc list-inside space-y-2 text-[#d4d4d4]">
             <li><strong className="text-white">Proibição total de menores:</strong> É expressamente proibido o cadastro, acesso e permanência de menores de 18 anos, mesmo com autorização de pais ou responsáveis. O ECA (Lei 8.069/90) não se aplica pois não admitimos menores.</li>

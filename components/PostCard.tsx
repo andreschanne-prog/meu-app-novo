@@ -244,7 +244,7 @@ export default function PostCard({ post }: { post: Post }) {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowLikers(false)}>
           <div className="bg-[#0a0a0a] w-full sm:w- rounded-t-3xl sm:rounded-2xl flex flex-col max-h- border border-[#262626]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]"><div className="w-8" /><h3 className="font-medium text-white">Curtido por</h3><button onClick={() => setShowLikers(false)}><X className="w-6 h-6 text-white" /></button></div>
-            <div className="flex-1 overflow-y-auto p-3">{likers.map(l => (<button key={l.id} onClick={() => { setShowLikers(false); router.push('/user/' + l.id) }} className="flex items-center gap-3 w-full p-2 hover:bg-[#1a1a1a] rounded-xl"><img src={l.avatar_url} className="w-10 h-10 rounded-full" alt="" /><div className="text-left"><p className="text-sm text-white">@{l.username}</p><p className="text-xs text-[#8a8a8a]">{l.full_name}</p></div></button>))}</div>
+            <div className="flex-1 overflow-y-auto p-3">{likers.map(l => (<button key={l.id} onClick={() => { setShowLikers(false); router.push('/user/' + l.id) }} className="flex items-center gap-3 w-full p-2 hover:bg-[#1a1a1a] rounded-xl"><img src={l.avatar_url} className="w-11 h-11 rounded-full" alt="" /><div className="text-left"><p className="text-sm text-white">@{l.username}</p><p className="text-xs text-[#8a8a8a]">{l.full_name}</p></div></button>))}</div>
           </div>
         </div>
       )}

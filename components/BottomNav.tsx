@@ -28,7 +28,7 @@ export default function BottomNav() {
                 <div className="bg-white text-black rounded-full p-1.5 sm:p-2 pulse-orange">
                   <Icon className="w-7 h-7 sm:w-7 sm:h-7" />
                 </div>
-                <span className="text-[9px] sm:text-[10px] mt-0.5 text-white font-light tracking-wide">{it.label}</span>
+                <span className="text-[9px] sm:text-[11px] mt-0.5 text-white font-light tracking-wide">{it.label}</span>
               </button>
             )
           }
@@ -40,7 +40,7 @@ export default function BottomNav() {
                 active ? 'text-white' : 'text-[#a8a8a8]'
               )}>
               <Icon className={classNames('w-7 h-7 sm:w-7 sm:h-7', active && 'text-white')} />
-              <span className="text-[9px] sm:text-[10px] leading-tight font-light">{it.label}</span>
+              <span className="text-[9px] sm:text-[11px] leading-tight font-light">{it.label}</span>
             </button>
           )
         })}

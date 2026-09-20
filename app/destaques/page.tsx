@@ -72,7 +72,7 @@ export default function DestaquesPage() {
                 </div>
                 <div>
                   <h1 className="text-sm font-bold text-white tracking-wider">Destaques do MISHH</h1>
-                  <p className="text-[9px] tracking-[0.2em] text-[#ff6a00]/70 -mt-1">RED CARPET EDITION</p>
+                  <p className="text-[9px] tracking-[0.2em] text-[#ff6a00]/70 -mt-1">TELA DOS FAMOSOS</p>
                 </div>
               </div>
               <Link href="/feed" className="text-xs text-[#666] hover:text-white border border-[#2a1015] px-3 py-1 rounded-full hover:border-[#4a1018] transition">

@@ -4,7 +4,7 @@ import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
   title: 'MISHH - Rede Social',
-  description: 'A rede social que transforma você em um artista.',
+  description: 'Todo mês um destaque novo.',
   applicationName: 'MISHH',
   authors: [{ name: 'MISHH' }],
 }
