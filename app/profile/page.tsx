@@ -9,6 +9,7 @@ import { VerifiedBadge } from '@/components/VerifiedBadge'
 import OnlineBadge from '@/components/OnlineBadge'
 import { isAdmin } from '@/lib/helpers'
 import { Shield, Menu, X, Lock, Globe, UserX, LogOut, Share2, Pencil, ChevronRight, Heart, Grid3x3, FileText, Flame, Megaphone, MapPin, Trash2, Search } from 'lucide-react'
+import PostCard from '@/components/PostCard'
 
 type BlockedUser = { id: string; username: string; full_name: string; avatar_url: string }
 type FollowUser = { id: string; username: string; full_name: string; avatar_url: string }
@@ -31,11 +32,12 @@ export default function ProfilePage() {
   const [isUserAdmin, setIsUserAdmin] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showBlocked, setShowBlocked] = useState(false)
+  const [showAvatarModal, setShowAvatarModal] = useState(false)
+  const [postAberto, setPostAberto] = useState<any>(null)
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([])
   const [loadingBlocked, setLoadingBlocked] = useState(false)
   const [activeTab, setActiveTab] = useState<'fotos' | 'textos'>('fotos')
 
-  // NOVO: modal de seguidores / seguindo
   const [showFollowers, setShowFollowers] = useState(false)
   const [showFollowing, setShowFollowing] = useState(false)
   const [followersList, setFollowersList] = useState<FollowUser[]>([])
@@ -48,7 +50,7 @@ export default function ProfilePage() {
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
     const { data: ps } = await supabase.from('posts').select('*, likes(count)').eq('user_id', user.id).order('created_at', { ascending: false })
-    setPosts((ps || []).map((p: any) => ({...p, like_count: p.likes?.[0]?.count?? 0 })))
+    setPosts((ps || []).map((p: any) => ({...p, profiles: prof, like_count: p.likes?.[0]?.count?? 0 })))
     const { data: tl } = await supabase.rpc('get_total_likes_for_user', { p_user_id: user.id })
     setTotalLikes(Number(tl || 0))
     const [{ count: followersCount }, { count: followingCount }] = await Promise.all([
@@ -68,11 +70,11 @@ export default function ProfilePage() {
     return () => { cancelled = true }
   }, [user?.id])
   useEffect(() => {
-    if (menuOpen || showBlocked || showFollowers || showFollowing) {
+    if (menuOpen || showBlocked || showFollowers || showFollowing || showAvatarModal || postAberto) {
       document.body.style.overflow = 'hidden'
       return () => { document.body.style.overflow = '' }
     }
-  }, [menuOpen, showBlocked, showFollowers, showFollowing])
+  }, [menuOpen, showBlocked, showFollowers, showFollowing, showAvatarModal, postAberto])
 
   async function togglePrivate() {
     if (!profile) return
@@ -110,7 +112,6 @@ export default function ProfilePage() {
     setBlockedUsers(prev => prev.filter(u => u.id!== blockedId))
   }
 
-  // NOVAS FUNÇÕES: carregar quem te segue e quem você segue
   async function loadFollowers() {
     if (!user) return
     setLoadingList(true); setSearchFollow('')
@@ -178,7 +179,7 @@ export default function ProfilePage() {
       {showBlocked && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowBlocked(false)}>
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-          <div className="relative w-full max-w-md bg-[#0a0a0a] rounded-t-2xl sm:rounded-2xl border border-[#262626] max-h- flex flex-col" onClick={e=>e.stopPropagation()}>
+          <div className="relative w-full max-w-md bg-[#0a0a0a] rounded-t-lg sm:rounded-lg border border-[#262626] max-h- flex flex-col" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#262626]"><p className="text-white font-light text-sm">Usuários bloqueados</p><button onClick={() => setShowBlocked(false)} className="p-2 text-[#a8a8a8] hover:text-white"><X className="w-5 h-5" /></button></div>
             <div className="flex-1 overflow-y-auto p-3">
               {loadingBlocked? <div className="text-center py-10 text-[#a8a8a8] text-sm">Carregando...</div> : blockedUsers.length===0? <div className="text-center py-10 text-[#a8a8a8] text-sm">Nenhum usuário bloqueado.</div> : blockedUsers.map(u=>(
@@ -189,11 +190,10 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* MODAL SEGUIDORES / SEGUINDO - NOVO */}
       {(showFollowers || showFollowing) && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => { setShowFollowers(false); setShowFollowing(false) }}>
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
-          <div className="relative w-full sm:max-w-md h- sm:h- bg-[#0a0a0a] rounded-t-3xl sm:rounded-2xl border border-[#262626] flex flex-col overflow-hidden" onClick={e=>e.stopPropagation()}>
+          <div className="relative w-full sm:max-w-md h- sm:h- bg-[#0a0a0a] rounded-t-lg sm:rounded-lg border border-[#262626] flex flex-col overflow-hidden" onClick={e=>e.stopPropagation()}>
             <div className="shrink-0 px-5 pt-5 pb-3 border-b border-[#262626]">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-white font-light">{showFollowers? 'Seguidores' : 'Seguindo'}</h3>
@@ -222,11 +222,57 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {showAvatarModal && profile.avatar_url && (
+        <div
+          className="fixed inset-0 z-[100] flex animate-in items-center justify-center bg-black/90 p-4 backdrop-blur-sm duration-300 fade-in"
+          onClick={() => setShowAvatarModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Foto de perfil de @${profile.username}`}
+        >
+          <button
+            type="button"
+            onClick={() => setShowAvatarModal(false)}
+            aria-label="Fechar foto de perfil"
+            className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white transition hover:bg-white/20 active:scale-95"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <img
+            src={profile.avatar_url}
+            alt={`Foto de perfil de ${profile.username}`}
+            onClick={event => event.stopPropagation()}
+            className="max-h-[90vh] max-w-[90vw] animate-in rounded-lg object-contain shadow-2xl duration-300 zoom-in-95"
+          />
+        </div>
+      )}
+
+      {postAberto && (
+        <div
+          className="fixed inset-0 z-[999] flex animate-in items-center justify-center bg-black/95 p-4 backdrop-blur-sm duration-300 fade-in"
+          onClick={() => setPostAberto(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Publicação aberta"
+        >
+          <button type="button" onClick={() => setPostAberto(null)} aria-label="Fechar publicação" className="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white transition hover:bg-white/20 active:scale-95">
+            <X className="h-6 w-6" />
+          </button>
+          <div className="max-h-[95vh] w-full max-w-[430px] overflow-y-auto rounded-2xl" onClick={event => event.stopPropagation()}>
+            <PostCard post={postAberto} />
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-3xl px-4 pb-20 pt-4">
-        <div className="rounded-2xl border border-[#262626] bg-[#111111]/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+        <div className="rounded-lg border border-[#262626] bg-[#111111]/80 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
           <div className="flex gap-6">
             <div className="relative h-20 w-20 sm:h-24 sm:w-24 shrink-0 overflow-hidden rounded-full border border-[#3a3a3a] bg-[#1d1d1d]">
-              {profile.avatar_url? <img src={profile.avatar_url} alt={profile.username} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-3xl text-[#a8a8a8]">{profile.username?.[0]?.toUpperCase()}</div>}
+              {profile.avatar_url? (
+                <button type="button" onClick={() => setShowAvatarModal(true)} aria-label="Ampliar foto de perfil" className="block h-full w-full cursor-zoom-in">
+                  <img src={profile.avatar_url} alt={profile.username} className="h-full w-full object-cover transition duration-300 hover:scale-105" />
+                </button>
+              ) : <div className="flex h-full w-full items-center justify-center text-3xl text-[#a8a8a8]">{profile.username?.[0]?.toUpperCase()}</div>}
               {profile.is_verified && <VerifiedBadge className="absolute -bottom-1 -right-1" />}
             </div>
             <div className="flex flex-1 flex-col justify-center min-w-0">
@@ -260,20 +306,19 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* AGORA CLICÁVEL */}
           <div className="mt-6 grid grid-cols-2 gap-3">
-            <button onClick={async()=>{ setShowFollowers(true); await loadFollowers()}} className="rounded-2xl border border-[#262626] bg-[#171717] p-4 text-center hover:bg-[#1e1e1e] active:scale-[0.98] transition">
+            <button onClick={async()=>{ setShowFollowers(true); await loadFollowers()}} className="rounded-lg border border-[#262626] bg-[#171717] p-4 text-center hover:bg-[#1e1e1e] active:scale-[0.98] transition">
               <p className="text-xl font-light text-white">{followers}</p>
               <p className="text- uppercase tracking-[0.18em] text-[#a8a8a8] mt-1">Seguidores</p>
             </button>
-            <button onClick={async()=>{ setShowFollowing(true); await loadFollowing()}} className="rounded-2xl border border-[#262626] bg-[#171717] p-4 text-center hover:bg-[#1e1e1e] active:scale-[0.98] transition">
+            <button onClick={async()=>{ setShowFollowing(true); await loadFollowing()}} className="rounded-lg border border-[#262626] bg-[#171717] p-4 text-center hover:bg-[#1e1e1e] active:scale-[0.98] transition">
               <p className="text-xl font-light text-white">{following}</p>
               <p className="text- uppercase tracking-[0.18em] text-[#a8a8a8] mt-1">Seguindo</p>
             </button>
           </div>
 
-          <div className="mt-4 relative overflow-hidden rounded-2xl border border-orange-400/20 bg-gradient-to-br from-[#ff6a00] via-[#ff8533] to-[#ff4500] p-">
-            <div className="relative rounded- bg-gradient-to-br from-[#ff7a18] to-[#ff4e00] p-4">
+          <div className="mt-4 relative overflow-hidden rounded-lg border border-orange-400/20 bg-gradient-to-br from-[#ff6a00] via-[#ff8533] to-[#ff4500] p-">
+            <div className="relative rounded-lg bg-gradient-to-br from-[#ff7a18] to-[#ff4e00] p-4">
               <div className="absolute -top-10 -right-10 h-32 w-32 rounded-full bg-white/20 blur-2xl" />
               <div className="relative flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -289,25 +334,25 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="mt-6 rounded-2xl border border-[#262626] bg-[#111111]/80 overflow-hidden">
+        <div className="mt-6 rounded-lg border border-[#262626] bg-[#111111]/80 overflow-hidden">
           <div className="flex border-b border-[#262626]">
             <button onClick={() => setActiveTab('fotos')} className={`flex flex-1 items-center justify-center gap-2 py-4 text-sm font-light tracking-widest uppercase transition ${activeTab === 'fotos'? 'text-white border-b border-white' : 'text-[#a8a8a8] hover:text-white'}`}><Grid3x3 className="w-4 h-4" /> Fotos</button>
             <button onClick={() => setActiveTab('textos')} className={`flex flex-1 items-center justify-center gap-2 py-4 text-sm font-light tracking-widest uppercase transition ${activeTab === 'textos'? 'text-white border-b border-white' : 'text-[#a8a8a8] hover:text-white'}`}><FileText className="w-4 h-4" /> Textos</button>
           </div>
           <div className="p-2">
             {activeTab === 'fotos'? (
-              postsComFoto.length === 0? <div className="rounded-2xl border border-dashed border-[#3a3a3a] bg-[#121212] px-4 py-16 text-center text-sm text-[#a8a8a8]">Nenhuma foto ainda.</div> : (
+              postsComFoto.length === 0? <div className="rounded-lg border border-dashed border-[#3a3a3a] bg-[#121212] px-4 py-16 text-center text-sm text-[#a8a8a8]">Nenhuma foto ainda.</div> : (
                 <div className="grid grid-cols-3 gap-1 md:gap-2">
                   {postsComFoto.map((post) => (
-                    <div key={post.id} className="group relative aspect-square overflow-hidden bg-[#171717] cursor-pointer rounded-xl"><img src={post.image_url || post.media_url || post.photo_url} alt="post" className="h-full w-full object-cover group-hover:scale-105 transition duration-500" /></div>
+                    <button type="button" key={post.id} onClick={() => setPostAberto(post)} aria-label="Abrir publicação" className="group relative aspect-square overflow-hidden bg-[#171717] cursor-zoom-in rounded-lg"><img src={post.image_url || post.media_url || post.photo_url} alt="post" className="h-full w-full object-cover group-hover:scale-105 transition duration-500" /></button>
                   ))}
                 </div>
               )
             ) : (
-              posts.length === 0? <div className="rounded-2xl border border-dashed border-[#3a3a3a] bg-[#121212] px-4 py-16 text-center text-sm text-[#a8a8a8]">Nenhum post por enquanto.</div> : (
+              posts.length === 0? <div className="rounded-lg border border-dashed border-[#3a3a3a] bg-[#121212] px-4 py-16 text-center text-sm text-[#a8a8a8]">Nenhum post por enquanto.</div> : (
                 <div className="space-y-3 p-2">
                   {posts.map((post) => (
-                    <div key={post.id} className="rounded-2xl border border-[#262626] bg-[#111111] p-4"><p className="text-sm text-[#f5f5f5] whitespace-pre-wrap leading-relaxed">{post.content}</p></div>
+                    <div key={post.id} className="rounded-lg border border-[#262626] bg-[#111111] p-4"><p className="text-sm text-[#f5f5f5] whitespace-pre-wrap leading-relaxed">{post.content}</p></div>
                   ))}
                 </div>
               )

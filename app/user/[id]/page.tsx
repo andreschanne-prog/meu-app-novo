@@ -10,6 +10,7 @@ import ReportModal from '@/components/ReportModal'
 import { VerifiedBadge } from '@/components/VerifiedBadge'
 import OnlineBadge from '@/components/OnlineBadge'
 import { isUserOnline } from '@/hooks/usePresence'
+import PostCard from '@/components/PostCard'
 
 type FollowUser = { id: string; username: string; full_name: string; avatar_url: string; verificado?: boolean }
 
@@ -37,6 +38,7 @@ export default function UserPage() {
   const [requested, setRequested] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
+  const [postAberto, setPostAberto] = useState<any>(null)
   const [counts, setCounts] = useState({ followers: 0, following: 0 })
   const [activeTab, setActiveTab] = useState<'fotos' | 'textos'>('fotos')
   const [showFollowers, setShowFollowers] = useState(false)
@@ -57,6 +59,11 @@ export default function UserPage() {
     document.body.style.overflow = showFollowers || showFollowing? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [showFollowers, showFollowing])
+
+  useEffect(() => {
+    if (postAberto) document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [postAberto])
 
   async function fetchCounts(targetId: string) {
     const { data: cts } = await supabase.rpc('get_follow_counts', { p_target_id: targetId })
@@ -93,7 +100,7 @@ export default function UserPage() {
     if (!id ||!profile) return
     if (profile.is_private && me?.id!== id &&!following) { setPosts([]); return }
     supabase.from('posts').select('*, likes(count)').eq('user_id', id).order('created_at', { ascending: false }).then(({ data: ps }) => {
-      setPosts((ps || []).map((p: any) => ({...p, like_count: p.likes?.[0]?.count?? 0 })))
+      setPosts((ps || []).map((p: any) => ({...p, profiles: profile, like_count: p.likes?.[0]?.count?? 0 })))
     })
   }, [id, profile, following, me])
 
@@ -256,7 +263,7 @@ export default function UserPage() {
           </div>
           <div className="p-2">
             {restrictedAndHidden? <div className="py-16 text-center text-sm text-[#a8a8a8]">🔒 Conta restrita. Siga para ver.</div> :
-             activeTab==='fotos'? (posts.filter((p:any)=>p.image_url||p.media_url||p.photo_url).length===0? <div className="py-16 text-center text-[#a8a8a8] text-sm">Nenhuma foto</div> : <div className="grid grid-cols-3 gap-1">{posts.filter((p:any)=>p.image_url||p.media_url||p.photo_url).map((p:any)=><div key={p.id} className="aspect-square bg-[#171717] rounded-xl overflow-hidden"><img src={p.image_url||p.media_url||p.photo_url} className="h-full w-full object-cover" /></div>)}</div>)
+             activeTab==='fotos'? (posts.filter((p:any)=>p.image_url||p.media_url||p.photo_url).length===0? <div className="py-16 text-center text-[#a8a8a8] text-sm">Nenhuma foto</div> : <div className="grid grid-cols-3 gap-1">{posts.filter((p:any)=>p.image_url||p.media_url||p.photo_url).map((p:any)=><button type="button" key={p.id} onClick={() => setPostAberto(p)} aria-label="Abrir publicação" className="aspect-square bg-[#171717] rounded-xl overflow-hidden cursor-zoom-in"><img src={p.image_url||p.media_url||p.photo_url} alt="post" className="h-full w-full object-cover transition duration-300 hover:scale-105" /></button>)}</div>)
              : (posts.length===0? <div className="py-16 text-center text-[#a8a8a8] text-sm">Nenhum post</div> : <div className="space-y-3 p-2">{posts.map((p:any)=><div key={p.id} className="rounded-2xl border border-[#262626] bg-[#111] p-4"><p className="text-sm text-white whitespace-pre-wrap">{p.content}</p></div>)}</div>)}
           </div>
         </div>
@@ -264,6 +271,14 @@ export default function UserPage() {
 
       {showFollowers && <FollowListModal title="Seguidores" list={followersList} filtered={filteredFollowers} onClose={()=>setShowFollowers(false)} />}
       {showFollowing && <FollowListModal title="Seguindo" list={followingList} filtered={filteredFollowing} onClose={()=>setShowFollowing(false)} />}
+      {postAberto && (
+        <div className="fixed inset-0 z-[999] flex animate-in items-center justify-center bg-black/95 p-4 backdrop-blur-sm duration-300 fade-in" onClick={() => setPostAberto(null)} role="dialog" aria-modal="true" aria-label="Publicação aberta">
+          <button type="button" onClick={() => setPostAberto(null)} aria-label="Fechar publicação" className="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white transition hover:bg-white/20 active:scale-95"><X className="h-6 w-6" /></button>
+          <div className="max-h-[95vh] w-full max-w-[430px] overflow-y-auto rounded-2xl" onClick={event => event.stopPropagation()}>
+            <PostCard post={postAberto} />
+          </div>
+        </div>
+      )}
       <ReportModal open={reportOpen} onClose={()=>setReportOpen(false)} reportedUserId={id as string} reportedPostId={null} target="profile" />
     </AppShell>
   )

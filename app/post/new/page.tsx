@@ -1,307 +1,211 @@
 'use client'
-import { useRef, useState, useCallback } from 'react'
-import AppShell from '@/components/AppShell'
-import { useAuth } from '@/hooks/useAuth'
+import { useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { extractHashtags, classNames } from '@/lib/helpers'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
-import { checkNSFW, NSFW_THRESHOLD } from '@/hooks/useNSFWCheck'
-import { notifyMentionedUsers } from '@/lib/push'
+import { ArrowLeft, Search, SlidersHorizontal, X } from 'lucide-react'
 
 const CLOUD_NAME = 'nzj72eu0'
 const UPLOAD_PRESET = 'mishh_upload'
 
-type Aspect = { key: string; label: string; ratio: number; w: number; h: number }
-const ASPECTS: Aspect[] = [
-  { key: '1:1', label: '1:1', ratio: 1, w: 1080, h: 1080 },
-  { key: '4:5', label: '4:5', ratio: 4 / 5, w: 1080, h: 1350 },
-  { key: '16:9', label: '16:9', ratio: 16 / 9, w: 1080, h: 608 },
-  { key: 'original', label: 'Original', ratio: 0, w: 1080, h: 1080 },
+type Photo = { id: string; file: File; preview: string; zoom: number; offset: { x: number; y: number }; filter: string }
+type TaggedUser = { id: string; username: string; full_name: string; avatar_url: string | null }
+
+const FILTERS = [
+  { label: 'Original', css: 'none' },
+  { label: 'Vivo', css: 'saturate(1.35) contrast(1.08)' },
+  { label: 'Quente', css: 'sepia(.2) saturate(1.25) brightness(1.04)' },
+  { label: 'P&B', css: 'grayscale(1) contrast(1.08)' },
+  { label: 'Fosco', css: 'contrast(.9) brightness(1.08) saturate(.8)' },
 ]
 
-type PhotoItem = {
-  id: string
-  preview: string
-  file: File
-  zoom: number
-  offset: { x: number; y: number }
-  aspect: Aspect
-  brightness: number
-  contrast: number
-  saturate: number
-  exposure: number
-}
-
-export default function NewPostPage() {
-  const { user } = useAuth()
+export default function NewPost() {
   const router = useRouter()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const imageRefs = useRef<Record<string, HTMLImageElement | null>>({})
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  const [photos, setPhotos] = useState<PhotoItem[]>([])
-  const [activeIndex, setActiveIndex] = useState(0)
+  const [photos, setPhotos] = useState<Photo[]>([])
+  const [index, setIndex] = useState(0)
   const [caption, setCaption] = useState('')
+  const [taggedUsers, setTaggedUsers] = useState<TaggedUser[]>([])
+  const [tagQuery, setTagQuery] = useState('')
+  const [tagResults, setTagResults] = useState<TaggedUser[]>([])
+  const [showAdjustments, setShowAdjustments] = useState(false)
   const [loading, setLoading] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const active = photos[index]
 
-  const [isDragging, setIsDragging] = useState(false)
-  const [startPos, setStartPos] = useState({ x: 0, y: 0 })
-
-  const activePhoto = photos[activeIndex]
-
-  const updateActive = (patch: Partial<PhotoItem>) => {
-    setPhotos(prev => prev.map((p, i) => i === activeIndex? {...p,...patch } : p))
+  const searchUsers = async (value: string) => {
+    setTagQuery(value)
+    if (!value.trim()) { setTagResults([]); return }
+    const { data } = await supabase.from('profiles').select('id, username, full_name, avatar_url').ilike('username', `%${value.trim()}%`).limit(8)
+    setTagResults((data || []) as TaggedUser[])
   }
 
-  async function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || [])
-    if (!files.length) return
-    if (photos.length + files.length > 10) {
-      toast.error('Máximo 10 fotos')
-      return
-    }
-    for (const f of files) {
-      const nsfw = await checkNSFW(f)
-      if (!nsfw.safe && nsfw.score > NSFW_THRESHOLD) {
-        toast.error(`Bloqueado: ${f.name}`)
-        continue
-      }
-      const id = Math.random().toString(36).slice(2)
-      const preview = URL.createObjectURL(f)
-      const img = new Image()
-      img.src = preview
-      await new Promise(r => (img.onload = r))
-      let asp = ASPECTS[0]
-      const r = img.width / img.height
-      if (r > 1.2) asp = ASPECTS[2]
-      else if (r < 0.9) asp = ASPECTS[1]
-
-      setPhotos(prev => [
-       ...prev,
-        {
-          id, preview, file: f,
-          zoom: 1, offset: { x: 0, y: 0 }, aspect: asp,
-          brightness: 100, contrast: 100, saturate: 100, exposure: 100
-        }
-      ])
-    }
-    e.target.value = ''
+  const addTaggedUser = (profile: TaggedUser) => {
+    if (!taggedUsers.some(user => user.id === profile.id)) setTaggedUsers(users => [...users, profile])
+    setTagQuery(''); setTagResults([])
   }
 
+  const updateActivePhoto = (changes: Partial<Photo>) => {
+    setPhotos(prev => prev.map((photo, photoIndex) => photoIndex === index ? { ...photo, ...changes } : photo))
+  }
+
+  const resetActivePhoto = () => updateActivePhoto({ zoom: 1, offset: { x: 0, y: 0 }, filter: 'none' })
+
+  const addFiles = (files: FileList | null) => {
+    if (!files) return
+    const list = Array.from(files).slice(0, 10 - photos.length)
+    const newPhotos = list.map(f => ({
+      id: Math.random().toString(36).slice(2),
+      file: f,
+      preview: URL.createObjectURL(f),
+      zoom: 1,
+      offset: { x: 0, y: 0 },
+      filter: 'none',
+    }))
+    setPhotos(p => [...p,...newPhotos])
+  }
+
+  // PINÇA + ARRASTE
+  const pointers = useRef<Map<number, { x: number, y: number }>>(new Map())
+  const start = useRef<{ dist: number, zoom: number, ox: number, oy: number, sx: number, sy: number } | null>(null)
+  const getDist = () => {
+    const pts = Array.from(pointers.current.values())
+    if (pts.length < 2) return 0
+    return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+  }
   const onPointerDown = (e: React.PointerEvent) => {
-    setIsDragging(true)
-    setStartPos({ x: e.clientX - (activePhoto?.offset.x || 0), y: e.clientY - (activePhoto?.offset.y || 0) })
+    (e.target as HTMLElement).setPointerCapture(e.pointerId)
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 1) start.current = { dist: 0, zoom: active.zoom, ox: active.offset.x, oy: active.offset.y, sx: e.clientX, sy: e.clientY }
+    else if (pointers.current.size === 2) start.current = { dist: getDist(), zoom: active.zoom, ox: active.offset.x, oy: active.offset.y, sx: 0, sy: 0 }
   }
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!isDragging ||!activePhoto) return
-    updateActive({ offset: { x: e.clientX - startPos.x, y: e.clientY - startPos.y } })
+    if (!pointers.current.has(e.pointerId) ||!start.current ||!active) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (pointers.current.size === 1) {
+      const dx = e.clientX - start.current.sx
+      const dy = e.clientY - start.current.sy
+      setPhotos(prev => prev.map((p,i) => i===index? {...p, offset: { x: start.current!.ox + dx, y: start.current!.oy + dy } } : p))
+    } else {
+      const newDist = getDist()
+      if (start.current.dist === 0) return
+      let newZoom = start.current.zoom * (newDist / start.current.dist)
+      newZoom = Math.min(3, Math.max(1, newZoom))
+      setPhotos(prev => prev.map((p,i) => i===index? {...p, zoom: newZoom } : p))
+    }
   }
-  const onPointerUp = () => setIsDragging(false)
-
-  const getFilterString = (p: PhotoItem) => {
-    // exposure simulado com brightness extra
-    return `brightness(${p.brightness * (p.exposure/100)}%) contrast(${p.contrast}%) saturate(${p.saturate}%)`
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size === 0) start.current = null
   }
 
-  const getCroppedBlob = useCallback(async (photo: PhotoItem): Promise<Blob> => {
+  const getBlob = useCallback(async (p: Photo): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-      const img = imageRefs.current[photo.id]
-      const container = containerRef.current
-      if (!img ||!container) return reject('no img')
-      let outW = photo.aspect.w
-      let outH = photo.aspect.h
-      if (photo.aspect.key === 'original') {
-        outW = 1080
-        outH = Math.round(1080 / (img.naturalWidth / img.naturalHeight))
+      const img = new Image()
+      img.src = p.preview
+      img.onload = () => {
+        const outW = 1080, outH = 1350
+        const canvas = document.createElement('canvas')
+        canvas.width = outW; canvas.height = outH
+        const ctx = canvas.getContext('2d')!
+        const rect = containerRef.current!.getBoundingClientRect()
+        const toOut = outW / rect.width
+        const base = Math.max(outW / img.naturalWidth, outH / img.naturalHeight)
+        const w = img.naturalWidth * base * p.zoom
+        const h = img.naturalHeight * base * p.zoom
+        const x = outW/2 - w/2 + p.offset.x * toOut
+        const y = outH/2 - h/2 + p.offset.y * toOut
+        ctx.filter = p.filter
+        ctx.drawImage(img, x, y, w, h)
+        canvas.toBlob(b => b? resolve(b) : reject('erro'), 'image/jpeg', 0.92)
       }
-      const canvas = document.createElement('canvas')
-      canvas.width = outW
-      canvas.height = outH
-      const ctx = canvas.getContext('2d')!
-      ctx.filter = getFilterString(photo)
-      const rect = container.getBoundingClientRect()
-      const scaleX = outW / rect.width
-      const scaleY = outH / rect.height
-      ctx.save()
-      ctx.translate(outW / 2 + photo.offset.x * scaleX, outH / 2 + photo.offset.y * scaleY)
-      ctx.scale(photo.zoom, photo.zoom)
-      const baseScale = Math.max(rect.width / img.naturalWidth, rect.height / img.naturalHeight)
-      const drawW = img.naturalWidth * baseScale * (outW / rect.width)
-      const drawH = img.naturalHeight * baseScale * (outH / rect.height)
-      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH)
-      ctx.restore()
-      canvas.toBlob(b => b? resolve(b) : reject('canvas'), 'image/jpeg', 0.92)
     })
   }, [])
 
-  async function uploadToCloudinary(blob: Blob) {
-    const fd = new FormData()
-    fd.append('file', blob)
-    fd.append('upload_preset', UPLOAD_PRESET)
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd })
-    const data = await res.json()
-    if (!res.ok ||!data.secure_url) throw new Error(data.error?.message || 'Erro no upload')
-    return data.secure_url as string
-  }
-
-  async function handlePublish() {
-    if (!user) return toast.error('Faça login')
-    if (!photos.length) return toast.error('Selecione fotos')
+  const publish = async () => {
+    if (!photos.length) return
     setLoading(true)
-    const tId = toast.loading(`Publicando ${photos.length} foto(s)...`)
+    const tId = toast.loading('Publicando...')
     try {
-      const blobs = await Promise.all(photos.map(p => getCroppedBlob(p)))
-      const urls = await Promise.all(blobs.map(b => uploadToCloudinary(b)))
-      const hashtags = extractHashtags(caption)
-
-      const { error } = await supabase.from('posts').insert({
-        user_id: user.id,
-        image_url: urls[0],
-        images: urls,
-        filter: 'normal',
-        caption,
-        hashtags,
-      })
-
-      if (error) {
-        const rows = urls.map((url, i) => ({
-          user_id: user.id,
-          image_url: url,
-          filter: 'normal',
-          caption: i === 0? caption : '',
-          hashtags: i === 0? hashtags : [],
-        }))
-        const { error: err2 } = await supabase.from('posts').insert(rows)
-        if (err2) throw err2
-      }
-
-      void notifyMentionedUsers({ actorId: user.id, text: caption, body: `@${user.user_metadata?.username || 'Alguém'} marcou você.`, url: '/feed' })
-      toast.success('Postado!', { id: tId })
-      router.push('/feed')
-    } catch (err: any) {
-      toast.error(err.message || 'Erro', { id: tId })
-    } finally {
-      setLoading(false)
-    }
+      const blobs = await Promise.all(photos.map(getBlob))
+      const urls = await Promise.all(blobs.map(async b => {
+        const fd = new FormData(); fd.append('file', b); fd.append('upload_preset', UPLOAD_PRESET)
+        const r = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd })
+        const d = await r.json(); return d.secure_url
+      }))
+      const { error } = await supabase.from('posts').insert({ image_url: urls[0], images: urls, caption, filter: active?.filter || 'none', tagged_user_ids: taggedUsers.map(user => user.id) })
+      if (error) throw error
+      toast.success('Postado!', { id: tId }); router.push('/feed')
+    } catch (e: any) { toast.error(e.message, { id: tId }) } finally { setLoading(false) }
   }
 
-  const hasAdjust = activePhoto && (activePhoto.brightness!== 100 || activePhoto.contrast!== 100 || activePhoto.saturate!== 100 || activePhoto.exposure!== 100 || activePhoto.zoom!== 1)
+  if (photos.length === 0) {
+    return (
+      <div className="relative min-h-screen bg-black grid place-items-center p-4">
+        <button type="button" onClick={() => router.push('/feed')} aria-label="Voltar para o feed" className="absolute left-4 top-4 rounded-full p-2 text-white hover:bg-white/10 active:scale-95 transition">
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        <label className="w-full max-w-md aspect-[4/5] max-h-[70vh] bg-[#0f0f0f] border border-dashed border-white/15 grid place-items-center cursor-pointer rounded-lg">
+          <input type="file" accept="image/*" multiple className="hidden" onChange={e => addFiles(e.target.files)} />
+          <span className="text-white text-sm">Toque para escolher</span>
+        </label>
+      </div>
+    )
+  }
 
   return (
-    <AppShell>
-      <div className="max-w- mx-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text- font-semibold tracking-tight text-white">Nova publicação</h2>
-          {photos.length > 0 && (
-            <button onClick={handlePublish} disabled={loading} className="h-9 px-5 bg-white text-black rounded-full text- font-medium disabled:opacity-50 hover:bg-zinc-200 active:scale-95 transition">
-              {loading? 'Publicando...' : `Publicar ${photos.length > 1? `(${photos.length})` : ''}`}
-            </button>
-          )}
+    <div className="min-h-screen bg-black text-white flex flex-col">
+      <div className="h-14 flex items-center justify-between px-4 border-b border-white/10 w-full max-w-5xl mx-auto">
+        <button type="button" onClick={() => router.push('/feed')} aria-label="Voltar para o feed" className="rounded-full p-2 text-white hover:bg-white/10 active:scale-95 transition">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <button onClick={publish} disabled={loading} className="text-[#0095f6] font-bold text-">{loading? '...' : 'Publicar'}</button>
+      </div>
+
+      {/* CONTAINER MENOR - CABE NO PC */}
+      <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-6 p-4 w-full max-w-5xl mx-auto">
+        {/* FOTO DIMINUIDA */}
+        <div
+          ref={containerRef}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+          onDoubleClick={() => setPhotos(prev => prev.map((p,i) => i===index? {...p, zoom: 1, offset: {x:0,y:0}} : p))}
+          className="relative w-full max-w-[560px] aspect-[4/5] max-h-[70vh] bg-[#0f0f0f] overflow-hidden touch-none select-none rounded-lg"
+        >
+          {photos.map((p,i) => (
+            <img key={p.id} src={p.preview} alt="" draggable={false}
+              className={`absolute top-1/2 left-1/2 w-full h-full object-cover max-w-none ${i===index? 'opacity-100' : 'opacity-0'}`}
+              style={{ transform: `translate(-50%, -50%) translate(${p.offset.x}px, ${p.offset.y}px) scale(${p.zoom})`, filter: p.filter }} />
+          ))}
         </div>
 
-        {photos.length === 0? (
-          <label className="group flex flex-col items-center justify-center w-full h- rounded- border border-dashed border-white/15 bg-[#121212] hover:bg-[#171717] hover:border-white/25 transition cursor-pointer">
-            <input ref={fileRef} type="file" accept="image/*" multiple onChange={onFiles} className="hidden" />
-            <div className="w-16 h-16 rounded-full bg-white text-black grid place-items-center text-2xl group-active:scale-90 transition">+</div>
-            <p className="mt-4 text- text-white font-medium">Arraste fotos ou clique para escolher</p>
-            <p className="text- text-zinc-500 mt-1">Até 10 fotos • arraste para reposicionar</p>
-          </label>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-4">
-            <div className="space-y-3">
-              <div
-                ref={containerRef}
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerLeave={onPointerUp}
-                onDoubleClick={() => updateActive({ zoom: 1, offset: { x: 0, y: 0 } })}
-                className="relative w-full bg-black rounded- overflow-hidden select-none touch-none cursor-grab active:cursor-grabbing border border-white/10"
-                style={{ aspectRatio: activePhoto?.aspect.key === 'original'? undefined : activePhoto?.aspect.ratio || 1 }}
-              >
-                {photos.map((p, i) => (
-                  <img
-                    key={p.id}
-                    ref={el => { imageRefs.current[p.id] = el }}
-                    src={p.preview}
-                    alt=""
-                    draggable={false}
-                    className={`absolute top-1/2 left-1/2 max-w-none will-change-transform ${i === activeIndex? 'opacity-100' : 'opacity-0'}`}
-                    style={{
-                      filter: getFilterString(p),
-                      transform: `translate(-50%, -50%) translate(${p.offset.x}px, ${p.offset.y}px) scale(${p.zoom})`,
-                      width: '100%', height: '100%', objectFit: 'cover'
-                    }}
-                  />
-                ))}
-                {photos.length > 1 && (
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur">
-                    {photos.map((_, i) => (
-                      <div key={i} className={classNames('w-1.5 h-1.5 rounded-full transition-all', i === activeIndex? 'bg-white w-4' : 'bg-white/40')} />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto no-scrollbar p-1">
-                {photos.map((p, i) => (
-                  <button key={p.id} onClick={() => setActiveIndex(i)} className={classNames('relative shrink-0 w- h- rounded-xl overflow-hidden border-2 transition', i === activeIndex? 'border-white' : 'border-transparent opacity-60 hover:opacity-100')}>
-                    <img src={p.preview} className="w-full h-full object-cover" style={{ filter: getFilterString(p) }} alt="" />
-                    <button onClick={(e) => { e.stopPropagation(); setPhotos(prev => { const n = prev.filter((_, idx) => idx!== i); if (activeIndex >= n.length) setActiveIndex(Math.max(0, n.length -1)); return n })}} className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/70 text-white text- grid place-items-center">✕</button>
-                  </button>
-                ))}
-                {photos.length < 10 && (
-                  <label className="shrink-0 w- h- rounded-xl bg-[#1e1e1e] border border-dashed border-white/15 grid place-items-center cursor-pointer hover:bg-[#252525] text-xl text-white">+
-                    <input type="file" accept="image/*" multiple onChange={onFiles} className="hidden" />
-                  </label>
-                )}
-              </div>
-
-              <div className="rounded- bg-[#161616] border border-white/5 p-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-1.5">
-                    {ASPECTS.map(a => (
-                      <button key={a.key} onClick={() => updateActive({ aspect: a })} className={classNames('h-8 px-3.5 rounded-full text- font-medium transition', activePhoto?.aspect.key === a.key? 'bg-white text-black' : 'bg-[#262626] text-zinc-300 hover:bg-[#2f2f2f]')}>{a.label}</button>
-                    ))}
-                  </div>
-                  {hasAdjust && (
-                    <button onClick={() => updateActive({ zoom: 1, offset: { x: 0, y: 0 }, brightness: 100, contrast: 100, saturate: 100, exposure: 100 })} className="h-8 px-3 rounded-full text- bg-[#262626] text-zinc-400 hover:text-white">Resetar</button>
-                  )}
-                </div>
-
-                <div className="space-y-3.5">
-                  <div className="flex items-center gap-3">
-                    <span className="text- text-zinc-500 w- uppercase tracking-widest">Zoom</span>
-                    <input type="range" min={1} max={3} step={0.01} value={activePhoto?.zoom || 1} onChange={e => updateActive({ zoom: parseFloat(e.target.value) })} className="flex-1 accent-white" />
-                    <span className="text- text-white w-10 text-right">{(activePhoto?.zoom || 1).toFixed(1)}x</span>
-                  </div>
-                  {[
-                    { k: 'exposure', label: 'Exposição', min: 50, max: 150 },
-                    { k: 'brightness', label: 'Brilho', min: 50, max: 150 },
-                    { k: 'contrast', label: 'Contraste', min: 50, max: 150 },
-                    { k: 'saturate', label: 'Saturação', min: 0, max: 200 },
-                  ].map(c => (
-                    <div key={c.k} className="flex items-center gap-3">
-                      <span className="text- text-zinc-500 w- uppercase tracking-widest">{c.label}</span>
-                      <input type="range" min={c.min} max={c.max} value={(activePhoto as any)?.[c.k]?? 100} onChange={e => updateActive({ [c.k]: parseInt(e.target.value) } as any)} className="flex-1 accent-white" />
-                      <span className="text- text-white w-10 text-right">{(activePhoto as any)?.[c.k]?? 100}%</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded- bg-[#161616] border border-white/5 p-4 h-fit sticky top-4">
-              <textarea value={caption} onChange={e => setCaption(e.target.value)} placeholder="Escreva uma legenda... #hashtags @menções" className="w-full min-h- bg-[#0f0f0f] border border-white/5 rounded- p-3.5 text- text-white placeholder:text-zinc-500 outline-none focus:border-white/15 resize-none" />
-              <div className="flex justify-between mt-3">
-                <span className="text- text-zinc-500">{caption.length}/2200</span>
-                <span className="text- text-zinc-600">Arraste • duplo clique reseta</span>
-              </div>
-            </div>
+        <div className="w-full max-w-md space-y-3">
+          <textarea value={caption} onChange={e => setCaption(e.target.value)} placeholder="Adicione uma legenda..." maxLength={2200} className="w-full bg-[#121212] border border-white/10 rounded-lg p-3 text-sm outline-none min-h-28 resize-none" />
+          <div className="relative">
+            <Search className="absolute left-3 top-3 w-4 h-4 text-zinc-500" />
+            <input value={tagQuery} onChange={e => searchUsers(e.target.value)} placeholder="Marcar pessoas" className="w-full bg-[#121212] border border-white/10 rounded-lg pl-10 pr-3 py-3 text-sm outline-none" />
+            {tagResults.length > 0 && <div className="absolute z-10 top-full mt-1 w-full rounded-lg border border-white/10 bg-[#1a1a1a] p-1 shadow-xl">{tagResults.map(profile => <button type="button" key={profile.id} onClick={() => addTaggedUser(profile)} className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-white/10"><img src={profile.avatar_url || ''} alt="" className="h-8 w-8 rounded-full bg-[#333] object-cover" /><span className="text-sm text-white">@{profile.username}</span></button>)}</div>}
           </div>
-        )}
+          {taggedUsers.length > 0 && <div className="flex flex-wrap gap-2">{taggedUsers.map(user => <span key={user.id} className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-xs text-white">@{user.username}<button type="button" onClick={() => setTaggedUsers(users => users.filter(item => item.id !== user.id))} aria-label={`Remover @${user.username}`}><X className="h-3 w-3" /></button></span>)}</div>}
+          <button type="button" onClick={() => setShowAdjustments(value => !value)} className="flex items-center gap-2 text-sm text-white"><SlidersHorizontal className="h-4 w-4" /> Ajustar foto</button>
+          {showAdjustments && <div className="space-y-4 rounded-lg border border-white/10 bg-[#121212] p-3">
+            <div className="grid grid-cols-5 gap-2">{FILTERS.map(filter => <button type="button" key={filter.label} onClick={() => updateActivePhoto({ filter: filter.css })} className={`space-y-1 text-center text-[10px] ${active.filter === filter.css ? 'text-white' : 'text-zinc-500'}`}><img src={active.preview} alt="" className="aspect-square w-full rounded object-cover" style={{ filter: filter.css }} /><span>{filter.label}</span></button>)}</div>
+            <div className="space-y-3 border-t border-white/10 pt-3">
+              <label className="block text-xs text-zinc-300">Zoom <span className="float-right text-zinc-500">{active.zoom.toFixed(2)}x</span><input type="range" min="1" max="3" step="0.01" value={active.zoom} onChange={e => updateActivePhoto({ zoom: Number(e.target.value) })} className="mt-2 w-full accent-white" /></label>
+              <label className="block text-xs text-zinc-300">Horizontal <span className="float-right text-zinc-500">{Math.round(active.offset.x)}px</span><input type="range" min="-240" max="240" value={active.offset.x} onChange={e => updateActivePhoto({ offset: { ...active.offset, x: Number(e.target.value) } })} className="mt-2 w-full accent-white" /></label>
+              <label className="block text-xs text-zinc-300">Vertical <span className="float-right text-zinc-500">{Math.round(active.offset.y)}px</span><input type="range" min="-240" max="240" value={active.offset.y} onChange={e => updateActivePhoto({ offset: { ...active.offset, y: Number(e.target.value) } })} className="mt-2 w-full accent-white" /></label>
+              <button type="button" onClick={resetActivePhoto} className="text-xs text-zinc-400 underline underline-offset-4 hover:text-white">Restaurar ajustes desta foto</button>
+            </div>
+          </div>}
+          <p className="text-xs text-zinc-500">Pinça para zoom, arraste para mover e toque em uma miniatura para ajustar outra foto.</p>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-zinc-400">{photos.length}/10 fotos</span>
+            {photos.length < 10 && <label className="cursor-pointer rounded-full border border-white/20 px-3 py-1.5 text-xs text-white hover:bg-white/10">Adicionar fotos<input type="file" accept="image/*" multiple className="hidden" onChange={e => addFiles(e.target.files)} /></label>}
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">{photos.map((photo, photoIndex) => <button type="button" key={photo.id} onClick={() => setIndex(photoIndex)} aria-label={`Editar foto ${photoIndex + 1}`} className={`relative h-14 w-14 shrink-0 overflow-hidden rounded border-2 ${photoIndex === index ? 'border-white' : 'border-transparent'}`}><img src={photo.preview} alt="" className="h-full w-full object-cover" style={{ filter: photo.filter }} /><span className="absolute bottom-0 right-0 bg-black/70 px-1 text-[9px] text-white">{photoIndex + 1}</span></button>)}</div>
+        </div>
       </div>
-    </AppShell>
+    </div>
   )
 }

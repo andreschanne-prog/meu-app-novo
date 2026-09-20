@@ -15,8 +15,8 @@ export default function BottomNav() {
   const router = useRouter()
   const pathname = usePathname()
   return (
-    <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 bg-[#0a0a0a]/90 backdrop-blur-md rounded-full pb-safe shadow-[0_4px_24px_rgba(0,0,0,0.5)]" style={{ width: '60%', maxWidth: '600px' }}>
-      <div className="grid grid-cols-5 h-[35px] sm:h-[20px] px-1 sm:px-2 items-center">
+    <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 bg-[#0a0a0a]/90 backdrop-blur-md rounded-2xl pb-safe shadow-[0_4px_24px_rgba(0,0,0,0.5)]" style={{ width: '60%', maxWidth: '600px' }}>
+      <div className="grid grid-cols-5 h-[30px] sm:h-[30px] px-1 sm:px-2 items-center">
         {items.map(it => {
           const Icon = it.icon
           const active = pathname === it.href
