@@ -1,11 +1,11 @@
 'use client'
 
-import { FormEvent, useEffect, useState } from 'react'
+import { FormEvent, useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { isUserOnline } from '@/hooks/usePresence'
 import { useRouter } from 'next/navigation'
-import { Heart, MessageCircle, MoreHorizontal, Send, X, Link2, UserX, Flag, AlertTriangle } from 'lucide-react'
+import { Heart, MessageCircle, MoreHorizontal, Send, X, Link2, UserX, Flag, ChevronLeft, ChevronRight } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { notifyMentionedUsers, sendPushNotification } from '@/lib/push'
 import { VerifiedBadge } from './VerifiedBadge'
@@ -14,7 +14,18 @@ import type { ReportReason } from './ReportModal'
 
 type ProfileLite = { id: string; username: string; full_name: string; avatar_url: string; verificado?: boolean; online?: boolean | null; last_seen?: string | null }
 type Comment = { id: string; post_id: string; user_id: string; text: string; created_at: string; profiles?: ProfileLite }
-type Post = { id: string; user_id: string; image_url?: string | null; filter?: string; caption?: string; created_at: string; profiles?: ProfileLite; like_count?: number; user_liked?: boolean }
+type Post = {
+  id: string;
+  user_id: string;
+  image_url?: string | null;
+  images?: string[] | null; // NOVO - carrossel com fotos já ajustadas
+  filter?: string;
+  caption?: string;
+  created_at: string;
+  profiles?: ProfileLite;
+  like_count?: number;
+  user_liked?: boolean
+}
 type Liker = { id: string; username: string; full_name: string; avatar_url: string }
 
 const REPORT_REASONS: { v: ReportReason; l: string }[] = [
@@ -53,6 +64,25 @@ export default function PostCard({ post }: { post: Post }) {
   const [showLikers, setShowLikers] = useState(false); const [likers, setLikers] = useState<Liker[]>([]); const [showBlock, setShowBlock] = useState(false)
   const [mentionUsers, setMentionUsers] = useState<ProfileLite[]>([]); const [showMentions, setShowMentions] = useState(false)
 
+  // CARROSSEL
+  const allImages = post.images && post.images.length > 0? post.images : post.image_url? [post.image_url] : []
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+
+  const next = () => setCurrentIndex(i => Math.min(i+1, allImages.length -1))
+  const prev = () => setCurrentIndex(i => Math.max(i-1, 0))
+
+  const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return
+    const diff = touchStartX.current - e.changedTouches[0].clientX
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) next()
+      else prev()
+    }
+    touchStartX.current = null
+  }
+
   useEffect(() => { if (showComments && comments.length === 0) loadComments() }, [showComments])
   useEffect(() => { if (showLikers && likers.length === 0) loadLikers() }, [showLikers])
 
@@ -69,17 +99,9 @@ export default function PostCard({ post }: { post: Post }) {
     if (!user) { toast.error('Faça login'); return }
     const was = liked; setLiked(!was); setLikeCount((p: number) => was? p-1 : p+1)
     const { error } = await supabase.rpc('toggle_like', { p_post_id: post.id })
-    if (error) {
-      setLiked(was); setLikeCount((p: number) => was? p+1 : p-1); toast.error('Erro ao curtir')
-      return
-    }
-    if (!was && post.user_id !== user.id) {
-      void sendPushNotification({
-        userId: post.user_id,
-        title: 'Nova curtida no MISHH',
-        body: `@${postProfile?.username || 'Alguém'} curtiu seu post.`,
-        url: `/post/${post.id}`,
-      })
+    if (error) { setLiked(was); setLikeCount((p: number) => was? p+1 : p-1); toast.error('Erro ao curtir'); return }
+    if (!was && post.user_id!== user.id) {
+      void sendPushNotification({ userId: post.user_id, title: 'Nova curtida no MISHH', body: `@${postProfile?.username || 'Alguém'} curtiu seu post.`, url: `/post/${post.id}` })
     }
   }
   async function submitComment(e: FormEvent) {
@@ -98,11 +120,9 @@ export default function PostCard({ post }: { post: Post }) {
     const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id).limit(50)
     const ids = (follows || []).map((follow: any) => follow.following_id)
     if (!ids.length) { setMentionUsers([]); return }
-
     const cleanQuery = query.trim()
     let request = supabase.from('profiles').select('id, username, full_name, avatar_url, verificado').in('id', ids).limit(6)
     if (cleanQuery) request = request.ilike('username', `%${cleanQuery}%`)
-
     const { data } = await request
     setMentionUsers((data || []) as ProfileLite[])
   }
@@ -122,11 +142,12 @@ export default function PostCard({ post }: { post: Post }) {
   async function reportComment(id: string, reason: ReportReason, uid: string) { if (!user) return; await supabase.from('reports').insert({ reporter_id: user.id, reported_user_id: uid, reported_post_id: post.id, reported_comment_id: id, reason, details: '' }); toast.success('Reportado'); setShowReportComment(null) }
 
   const showOnline = isUserOnline(postProfile) &&!postProfile?.verificado
+  // Fotos novas já vêm ajustadas do canvas, não precisa aplicar filtro. Mantém compatível com posts antigos
+  const isOldFilteredPost = post.filter && post.filter!== 'normal' && (!post.images || post.images.length===0)
 
   return (
     <>
-      {/* IGUAL AO ANUNCIO */}
-      <article className="bg-[#0a0a0a] rounded-2xl mb-4 overflow-hidden mx-auto w-full max-w-[470px] border border-[#262626]">
+      <article className="bg-[#0a0a0a] rounded-2xl mb-4 overflow-hidden mx-auto w-full max-w-[400px] border border-[#262626]">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => router.push('/user/' + post.user_id)} className="flex items-center gap-2.5">
             <div className="relative">
@@ -134,9 +155,7 @@ export default function PostCard({ post }: { post: Post }) {
               {postProfile?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={15} /></div>}
               {showOnline && <OnlineBadge size={10} className="-bottom-0.5 -right-0.5" />}
             </div>
-            <div className="flex items-center gap-1">
-              <span className="text-sm font-medium text-white">@{postProfile?.username || 'usuário'}</span>
-            </div>
+            <span className="text-sm font-medium text-white">@{postProfile?.username || 'usuário'}</span>
           </button>
           <div className="relative">
             <button onClick={() => setShowMenu(!showMenu)} className="p-2 text-[#a8a8a8] hover:text-white"><MoreHorizontal className="w-5 h-5" /></button>
@@ -150,31 +169,72 @@ export default function PostCard({ post }: { post: Post }) {
           </div>
         </div>
 
-        {post.image_url? (
-          <div className="bg-[#1a1a1a] w-full">
-            <img src={post.image_url} alt="" className={'w-full h-auto object-cover filter-' + (post.filter || 'normal')} onDoubleClick={toggleLike} />
+        {allImages.length > 0? (
+          <div className="relative w-full aspect-square bg-[#1a1a1a] overflow-hidden group" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+            {/* track */}
+            <div className="flex h-full transition-transform duration-300 ease-out" style={{ transform: `translateX(-${currentIndex * 100}%)` }}>
+              {allImages.map((url, idx) => (
+                <div key={idx} className="w-full h-full shrink-0">
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-full h-full object-cover select-none"
+                    style={isOldFilteredPost? { filter: post.filter } : {}}
+                    onDoubleClick={toggleLike}
+                    draggable={false}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* setas desktop */}
+            {allImages.length > 1 && (
+              <>
+                {currentIndex > 0 && (
+                  <button onClick={prev} className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 backdrop-blur grid place-items-center text-white opacity-0 group-hover:opacity-100 transition">
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                )}
+                {currentIndex < allImages.length -1 && (
+                  <button onClick={next} className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/60 backdrop-blur grid place-items-center text-white opacity-0 group-hover:opacity-100 transition">
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
+                {/* contador estilo insta */}
+                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur text- text-white font-medium">
+                  {currentIndex + 1}/{allImages.length}
+                </div>
+                {/* dots */}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                  {allImages.map((_, i) => (
+                    <div key={i} className={`h-1.5 rounded-full transition-all ${i===currentIndex? 'w-4 bg-white' : 'w-1.5 bg-white/40'}`} />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="px-4 py-4 bg-[#0f0f0f] border-y border-[#1f1f1f]">
-            <p className="text- leading- text-white whitespace-pre-wrap break-words font-light">
-              {post.caption}
-            </p>
+            <p className="text- leading- text-white whitespace-pre-wrap break-words font-light">{post.caption}</p>
           </div>
         )}
 
         <div className="px-4 py-3">
           <div className="flex items-center gap-1">
-            <button onClick={toggleLike} className={'p-2 -ml-2 active:scale-90 ' + (liked? 'text-red-500' : 'text-white')}><Heart className={'w-6 h-6 ' + (liked? 'fill-current' : '')} /></button>
+            <button onClick={toggleLike} className={'p-2 -ml-2 active:scale-90 transition ' + (liked? 'text-red-500' : 'text-white')}><Heart className={'w-6 h-6 ' + (liked? 'fill-current' : '')} /></button>
             <button onClick={() => setShowComments(!showComments)} className="p-2 text-white"><MessageCircle className="w-6 h-6" /></button>
           </div>
           {likeCount > 0? (<button onClick={() => setShowLikers(true)} className="mt-1 text-sm font-medium text-white">{likeCount} curtidas</button>) : (<p className="mt-1 text-sm text-[#8a8a8a]">Seja o primeiro a curtir</p>)}
-          {post.image_url && post.caption && (<p className="mt-2 text-sm text-white"><span className="font-medium mr-2">@{postProfile?.username}</span><span className="font-light">{post.caption}</span></p>)}
+          {allImages.length > 0 && post.caption && (<p className="mt-2 text-sm text-white"><span className="font-medium mr-2">@{postProfile?.username}</span><span className="font-light">{post.caption}</span></p>)}
           <p className="mt-2 text- text-[#8a8a8a] uppercase tracking-wider">{formatTime(post.created_at)}</p>
         </div>
 
         {user && (
           <form onSubmit={submitComment} className="flex items-center gap-2 px-4 pb-3 border-t border-[#1f1f1f] pt-3">
-            <div className="relative flex-1"><input type="text" value={commentText} onChange={(e) => handleCommentChange(e.target.value)} placeholder="Adicione um comentário..." maxLength={500} className="w-full bg-transparent text-sm text-white placeholder:text-[#8a8a8a] font-light outline-none" />{showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}</div>
+            <div className="relative flex-1">
+              <input type="text" value={commentText} onChange={(e) => handleCommentChange(e.target.value)} placeholder="Adicione um comentário..." maxLength={500} className="w-full bg-transparent text-sm text-white placeholder:text-[#8a8a8a] font-light outline-none" />
+              {showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}
+            </div>
             <button type="submit" disabled={!commentText.trim() || postingComment} className="text-[#a8a8a8] disabled:opacity-40"><Send className="w-5 h-5" /></button>
           </form>
         )}
@@ -188,17 +248,22 @@ export default function PostCard({ post }: { post: Post }) {
           </div>
         </div>
       )}
+
       {showComments && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowComments(false)}>
           <div className="bg-[#0a0a0a] w-full sm:w- rounded-t-3xl sm:rounded-2xl flex flex-col max-h- border border-[#262626]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]"><button onClick={() => setShowComments(false)}><X className="w-6 h-6 text-white" /></button><h3 className="font-medium text-white">Comentários</h3><div className="w-8" /></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">{comments.map(c => (<div key={c.id} className="flex gap-3"><div className="relative shrink-0"><img src={c.profiles?.avatar_url} className="w-8 h-8 rounded-full" alt="" />{c.profiles?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={13} /></div>}</div><div className="flex-1"><p className="text-sm text-white"><span className="font-medium">@{c.profiles?.username}</span> <span className="font-light">{c.text}</span></p><p className="text- text-[#8a8a8a]">{formatTime(c.created_at)}</p></div></div>))}</div>
-            {user && (<form onSubmit={submitComment} className="flex gap-3 p-4 border-t border-[#262626]"><div className="relative flex-1"><input value={commentText} onChange={e => handleCommentChange(e.target.value)} placeholder="Comentar..." className="w-full bg-transparent text-sm text-white outline-none" />{showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}</div><button type="submit" className="text-sm text-white">Postar</button></form>)}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {loadingComments? <p className="text-sm text-[#8a8a8a]">Carregando...</p> : comments.map(c => (<div key={c.id} className="flex gap-3 group"><div className="relative shrink-0"><img src={c.profiles?.avatar_url} className="w-8 h-8 rounded-full" alt="" />{c.profiles?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={13} /></div>}</div><div className="flex-1"><p className="text-sm text-white"><span className="font-medium">@{c.profiles?.username}</span> <span className="font-light ml-2">{c.text}</span></p><p className="text- text-[#8a8a8a] mt-1">{formatTime(c.created_at)}</p></div><button onClick={() => setShowReportComment(c.id)} className="opacity-0 group-hover:opacity-100 p-1"><Flag className="w-3 h-3 text-[#8a8a8a]" /></button></div>))}
+            </div>
+            {user && (<form onSubmit={submitComment} className="flex gap-3 p-4 border-t border-[#262626]"><div className="relative flex-1"><input value={commentText} onChange={e => handleCommentChange(e.target.value)} placeholder="Comentar..." className="w-full bg-transparent text-sm text-white outline-none" />{showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}</div><button type="submit" disabled={postingComment} className="text-sm text-white disabled:opacity-50">Postar</button></form>)}
           </div>
         </div>
       )}
+
       {showReportPost && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="bg-[#0a0a0a] w-full max-w-sm rounded-2xl border border-[#262626] p-2">{REPORT_REASONS.map(r => (<button key={r.v} onClick={() => reportPost(r.v)} className="w-full p-4 text-left text-white hover:bg-[#1a1a1a] rounded-xl">{r.l}</button>))}<button onClick={() => setShowReportPost(false)} className="w-full p-3 text-[#8a8a8a]">Cancelar</button></div></div>)}
       {showBlock && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="bg-[#0a0a0a] w-full max-w-sm rounded-2xl p-5 border border-[#262626]"><h3 className="text-white font-medium">Bloquear @{postProfile?.username}?</h3><button onClick={blockUser} className="w-full mt-4 p-3 bg-red-500 rounded-xl text-white">Bloquear</button><button onClick={() => setShowBlock(false)} className="w-full mt-2 p-3 text-[#8a8a8a]">Cancelar</button></div></div>)}
+      {showReportComment && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="bg-[#0a0a0a] w-full max-w-sm rounded-2xl border border-[#262626] p-2">{REPORT_REASONS.map(r => (<button key={r.v} onClick={() => { const c = comments.find(x=>x.id===showReportComment); if(c) reportComment(showReportComment, r.v, c.user_id) }} className="w-full p-4 text-left text-white hover:bg-[#1a1a1a] rounded-xl">{r.l}</button>))}<button onClick={() => setShowReportComment(null)} className="w-full p-3 text-[#8a8a8a]">Cancelar</button></div></div>)}
     </>
   )
 }

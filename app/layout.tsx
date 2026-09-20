@@ -1,17 +1,12 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
 import { Toaster } from 'react-hot-toast'
-import Script from 'next/script'
 
 export const metadata: Metadata = {
   title: 'MISHH - Rede Social',
-  description: 'A rede social que conecta o mundo. Compartilhe fotos, stories e converse.',
+  description: 'A rede social que transforma você em um artista.',
   applicationName: 'MISHH',
   authors: [{ name: 'MISHH' }],
-  // Opcional: coloca aqui seu ID do AdSense pra verificação do Google
-  other: {
-    'google-adsense-account': process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT || '',
-  },
 }
 
 export const viewport: Viewport = {
@@ -23,35 +18,18 @@ export const viewport: Viewport = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const adsenseClient = process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT
-
   return (
     <html lang="pt-BR">
       <head>
-        {/* AdSense só carrega se tiver o ID no .env */}
-        {adsenseClient && (
-          <Script
-            async
-            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${adsenseClient}`}
-            crossOrigin="anonymous"
-            strategy="afterInteractive"
-          />
-        )}
-        {/* AdMob para PWA / WebView - deixa preparado */}
-        <Script id="admob-config" strategy="afterInteractive">
-          {`
-            window.admobOptions = {
-              publisherId: "${adsenseClient || ''}",
-              bannerAdUnit: "${process.env.NEXT_PUBLIC_ADMOB_BANNER_ID || ''}"
-            };
-          `}
-        </Script>
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9640110316096383"
+          crossOrigin="anonymous"
+        ></script>
       </head>
-      <body>
-        {/* Toaster global */}
+      <body className="bg-black text-white antialiased">
         <Toaster 
           position="top-right" 
-          reverseOrder={false}
           toastOptions={{
             style: {
               background: '#262626',

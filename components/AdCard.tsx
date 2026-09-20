@@ -24,11 +24,11 @@ export default function AdCard({ ad, disguised = false }: { ad: Ad; disguised?: 
   useEffect(() => {
     if (!ad || viewedRef.current) return
     viewedRef.current = true
-    supabase.from('ad_views').insert({ ad_id: ad.id, user_id: user?.id || null })
+    supabase.from('ad_views').insert({ ad_id: ad.id, user_id: user?.id || null }).then(()=>{})
   }, [ad?.id, user?.id])
 
   async function onClick() {
-    await supabase.from('ad_clicks').insert({ ad_id: ad.id, user_id: user?.id || null })
+    supabase.from('ad_clicks').insert({ ad_id: ad.id, user_id: user?.id || null }).then(()=>{})
     if (ad.target_url) {
       const url = ad.target_url.startsWith('http')? ad.target_url : `https://${ad.target_url}`
       window.open(url, '_blank', 'noopener,noreferrer')
@@ -70,59 +70,38 @@ export default function AdCard({ ad, disguised = false }: { ad: Ad; disguised?: 
 }
 
 export function AdSenseBlock({ className = "" }: { className?: string }) {
-  const client = process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT
+  // CORRIGIDO: já usa seu PUB ID como fallback pra passar na verificação
+  const client = process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT || "ca-pub-9640110316096383"
   const slot = process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_SLOT || "0000000000"
   const adRef = useRef<HTMLModElement>(null)
+  const pushedRef = useRef(false)
 
   useEffect(() => {
-    if (!client ||!adRef.current) return
-    try { // @ts-ignore
+    if (pushedRef.current) return
+    if (!adRef.current) return
+    try {
+      // @ts-ignore
       (window.adsbygoogle = window.adsbygoogle || []).push({})
+      pushedRef.current = true
     } catch {}
-  }, [client])
+  }, [])
 
-  // SEM CHAVE - placeholder que o Google aceita pra aprovação
-  if (!client) {
-    return (
-      <div className={`flex justify-center w-full mb-4 ${className}`}>
-        <div className="bg-[#0a0a0a] overflow-hidden rounded-2xl w-full max-w-[470px] min-h-[250px] border border-[#262626] border-dashed flex flex-col">
-          <div className="bg-[#262626] text-[#a8a8a8] text-[10px] uppercase tracking-widest px-3.5 py-1.5">Anúncio</div>
-          <div className="flex-1 flex items-center justify-center p-6 text-xs text-[#555]">Espaço reservado Google AdSense 300x250</div>
-        </div>
-      </div>
-    )
-  }
-
-  // COM CHAVE - formato aprovado pelo Google
   return (
     <div className={`flex justify-center w-full mb-4 ${className}`}>
-      <div className="bg-[#0a0a0a] overflow-hidden rounded-2xl w-full max-w-[470px] min-h-[250px] border border-[#262626]">
+      <div className="bg-[#0a0a0a] overflow-hidden rounded-2xl w-full max-w-[470px] min-h-[300px] border border-[#262626]">
         <div className="bg-[#262626] text-[#a8a8a8] text-[10px] uppercase tracking-widest px-3.5 py-1.5">
           Anúncio · Google
         </div>
-        <div className="p-0 flex items-center justify-center">
+        <div className="flex items-center justify-center bg-black">
           <ins
             ref={adRef}
             className="adsbygoogle"
-            style={{ display: 'block', width: '100%', minWidth: '300px', minHeight: '250px' }}
+            style={{ display: 'block', width: '100%', minHeight: '250px' }}
             data-ad-client={client}
             data-ad-slot={slot}
-            data-ad-format="rectangle"
+            data-ad-format="auto"
             data-full-width-responsive="true"
           />
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export function AdMobBlock() {
-  return (
-    <div className="flex justify-center w-full mb-4">
-      <div className="bg-[#0a0a0a] overflow-hidden rounded-2xl w-full max-w-[470px] min-h-[250px] border border-[#262626] border-dashed flex flex-col">
-        <div className="bg-[#262626] text-[#a8a8a8] text-[10px] uppercase tracking-widest px-3.5 py-1.5">Anúncio</div>
-        <div id="admob-banner" className="flex-1 flex items-center justify-center p-6 text-xs text-[#555]">
-          Espaço AdMob 300x250
         </div>
       </div>
     </div>
