@@ -64,7 +64,6 @@ export default function PostCard({ post }: { post: Post }) {
   const [showLikers, setShowLikers] = useState(false); const [likers, setLikers] = useState<Liker[]>([]); const [showBlock, setShowBlock] = useState(false)
   const [mentionUsers, setMentionUsers] = useState<ProfileLite[]>([]); const [showMentions, setShowMentions] = useState(false)
 
-  // CORREÇÃO DO ERRO allImages.map - SEMPRE GARANTE ARRAY
   const allImages: string[] = (() => {
     const out: string[] = []
     // @ts-ignore
@@ -72,7 +71,6 @@ export default function PostCard({ post }: { post: Post }) {
     if (Array.isArray(rawImages)) {
       out.push(...rawImages.filter(Boolean).flat().map((s:any)=> typeof s === 'string'? s : ''))
     } else if (typeof rawImages === 'string' && rawImages) {
-      // pode vir como JSON string '["url1","url2"]'
       try {
         const parsed = JSON.parse(rawImages)
         if (Array.isArray(parsed)) out.push(...parsed.filter(Boolean))
@@ -104,15 +102,20 @@ export default function PostCard({ post }: { post: Post }) {
   useEffect(() => { if (showComments && comments.length === 0) loadComments() }, [showComments])
   useEffect(() => { if (showLikers && likers.length === 0) loadLikers() }, [showLikers])
 
+  // AJUSTE 1: pega os mais novos e inverte pra mostrar na ordem certa
   async function loadComments() {
     setLoadingComments(true)
-    const { data } = await supabase.from('comments').select('*, profiles(id, username, full_name, avatar_url, verificado)').eq('post_id', post.id).order('created_at', { ascending: true }).limit(20)
-    setComments((data || []).map((row: any) => ({...row, profiles: unwrapProfile(row.profiles)}))); setLoadingComments(false)
+    const { data } = await supabase.from('comments').select('*, profiles(id, username, full_name, avatar_url, verificado)').eq('post_id', post.id).order('created_at', { ascending: false }).limit(20)
+    const ordered = (data || []).reverse().map((row: any) => ({...row, profiles: unwrapProfile(row.profiles)}))
+    setComments(ordered)
+    setLoadingComments(false)
   }
+
   async function loadLikers() {
     const { data } = await supabase.from('likes').select('profiles(id, username, full_name, avatar_url)').eq('post_id', post.id).order('created_at', { ascending: false }).limit(50)
     setLikers((data || []).map((row: any) => unwrapProfile(row.profiles)).filter(Boolean) as Liker[])
   }
+
   async function toggleLike() {
     if (!user) { toast.error('Faça login'); return }
     const was = liked; setLiked(!was); setLikeCount((p: number) => was? p-1 : p+1)
@@ -122,17 +125,53 @@ export default function PostCard({ post }: { post: Post }) {
       void sendPushNotification({ userId: post.user_id, title: 'Nova curtida no MISHH', body: `@${postProfile?.username || 'Alguém'} curtiu seu post.`, url: `/post/${post.id}` })
     }
   }
+
+  // AJUSTE 2: comentario otimista + finally pra nunca travar o botão
   async function submitComment(e: FormEvent) {
-    e.preventDefault(); if (!user ||!commentText.trim()) return; setPostingComment(true)
+    e.preventDefault()
+    if (!user ||!commentText.trim() || postingComment) return
+
     const textToSubmit = commentText.trim()
-    const { data, error } = await supabase.rpc('add_comment', { p_post_id: post.id, p_text: textToSubmit })
-    const result = data as any
-    if (error) {
-      const { data: insData } = await supabase.from('comments').insert({ post_id: post.id, user_id: user.id, text: textToSubmit }).select('*, profiles(id, username, full_name, avatar_url, verificado)').single()
-      if (insData) { setComments((p: any) => [...p, {...insData, profiles: unwrapProfile(insData.profiles)}]); setCommentText(''); toast.success('Comentário!'); void notifyMentionedUsers({ actorId: user.id, text: textToSubmit, body: `@${postProfile?.username || 'Alguém'} marcou você em um comentário.`, url: `/post/${post.id}` }) }
-    } else if (result?.comment) { setComments((p: any) => [...p, {...result.comment!, profiles: result.profile}]); setCommentText(''); toast.success('Comentário!'); void notifyMentionedUsers({ actorId: user.id, text: textToSubmit, body: `@${postProfile?.username || 'Alguém'} marcou você em um comentário.`, url: `/post/${post.id}` }) }
-    setPostingComment(false)
+    const tempId = `temp-${Date.now()}`
+
+    // cria comentario fake pra aparecer na hora
+    const optimistic: Comment = {
+      id: tempId,
+      post_id: post.id,
+      user_id: user.id,
+      text: textToSubmit,
+      created_at: new Date().toISOString(),
+      profiles: {
+        id: user.id,
+        username: user.user_metadata?.username || 'voce',
+        full_name: user.user_metadata?.full_name || '',
+        avatar_url: user.user_metadata?.avatar_url || '',
+      }
+    }
+
+    setComments(p => [...p, optimistic])
+    setCommentText('')
+    setShowMentions(false)
+    setPostingComment(true)
+
+    try {
+      const { data, error } = await supabase.from('comments').insert({ post_id: post.id, user_id: user.id, text: textToSubmit }).select('*, profiles(id, username, full_name, avatar_url, verificado)').single()
+      if (error) throw error
+
+      // troca o temporario pelo real do banco
+      setComments(p => p.map(c => c.id === tempId? {...data, profiles: unwrapProfile((data as any).profiles) } as Comment : c))
+      toast.success('Comentário!')
+      void notifyMentionedUsers({ actorId: user.id, text: textToSubmit, body: `@${postProfile?.username || 'Alguém'} marcou você em um comentário.`, url: `/post/${post.id}` })
+    } catch (err: any) {
+      // se deu erro, remove o otimista e devolve o texto
+      setComments(p => p.filter(c => c.id!== tempId))
+      setCommentText(textToSubmit)
+      toast.error(err.message || 'Erro ao comentar')
+    } finally {
+      setPostingComment(false)
+    }
   }
+
   async function searchMentionUsers(query: string) {
     if (!user) return
     const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id).limit(50)
@@ -164,7 +203,7 @@ export default function PostCard({ post }: { post: Post }) {
 
   return (
     <>
-      <article className="bg-[#0a0a0a] rounded-2xl mb-4 overflow-hidden mx-auto w-full max-w- border border-[#262626]">
+      <article className="bg-[#0a0a0a] rounded-2xl mb-4 overflow-hidden mx-auto w-full max-w-[450px] border border-[#262626]">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => router.push('/user/' + post.user_id)} className="flex items-center gap-2.5">
             <div className="relative">
@@ -239,6 +278,24 @@ export default function PostCard({ post }: { post: Post }) {
           </div>
           {likeCount > 0? (<button onClick={() => setShowLikers(true)} className="mt-1 text-sm font-medium text-white">{likeCount} curtidas</button>) : (<p className="mt-1 text-sm text-[#8a8a8a]">Seja o primeiro a curtir</p>)}
           {allImages.length > 0 && post.caption && (<p className="mt-2 text-sm text-white"><span className="font-medium mr-2">@{postProfile?.username}</span><span className="font-light">{post.caption}</span></p>)}
+
+          {/* AJUSTE 3: MOSTRA OS COMENTÁRIOS EMBAIXO DA FOTO NO FEED */}
+          {comments.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {comments.slice(-2).map(c => (
+                <p key={c.id} className="text-sm text-white leading-snug">
+                  <span className="font-semibold">@{c.profiles?.username || 'voce'}</span>
+                  <span className="font-light ml-2">{c.text}</span>
+                </p>
+              ))}
+              {comments.length > 2 && (
+                <button onClick={() => setShowComments(true)} className="text-sm text-[#8a8a8a] hover:text-[#a8a8a8]">
+                  Ver todos os {comments.length} comentários
+                </button>
+              )}
+            </div>
+          )}
+
           <p className="mt-2 text- text-[#8a8a8a] uppercase tracking-wider">{formatTime(post.created_at)}</p>
         </div>
 
@@ -248,7 +305,9 @@ export default function PostCard({ post }: { post: Post }) {
               <input type="text" value={commentText} onChange={(e) => handleCommentChange(e.target.value)} placeholder="Adicione um comentário..." maxLength={500} className="w-full bg-transparent text-sm text-white placeholder:text-[#8a8a8a] font-light outline-none" />
               {showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}
             </div>
-            <button type="submit" disabled={!commentText.trim() || postingComment} className="text-[#a8a8a8] disabled:opacity-40"><Send className="w-5 h-5" /></button>
+            <button type="submit" disabled={!commentText.trim() || postingComment} className="text-white disabled:opacity-40 enabled:hover:text-[#0095f6] transition grid place-items-center min-w-">
+              {postingComment? <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : <Send className="w-5 h-5" />}
+            </button>
           </form>
         )}
       </article>
@@ -267,9 +326,9 @@ export default function PostCard({ post }: { post: Post }) {
           <div className="bg-[#0a0a0a] w-full sm:w- rounded-t-3xl sm:rounded-2xl flex flex-col max-h- border border-[#262626]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]"><button onClick={() => setShowComments(false)}><X className="w-6 h-6 text-white" /></button><h3 className="font-medium text-white">Comentários</h3><div className="w-8" /></div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {loadingComments? <p className="text-sm text-[#8a8a8a]">Carregando...</p> : comments.map(c => (<div key={c.id} className="flex gap-3 group"><div className="relative shrink-0"><img src={c.profiles?.avatar_url} className="w-8 h-8 rounded-full" alt="" />{c.profiles?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={13} /></div>}</div><div className="flex-1"><p className="text-sm text-white"><span className="font-medium">@{c.profiles?.username}</span> <span className="font-light ml-2">{c.text}</span></p><p className="text- text-[#8a8a8a] mt-1">{formatTime(c.created_at)}</p></div><button onClick={() => setShowReportComment(c.id)} className="opacity-0 group-hover:opacity-100 p-1"><Flag className="w-3 h-3 text-[#8a8a8a]" /></button></div>))}
+              {loadingComments? <p className="text-sm text-[#8a8a8a]">Carregando...</p> : comments.map(c => (<div key={c.id} className="flex gap-3 group"><div className="relative shrink-0"><img src={c.profiles?.avatar_url || 'https://picsum.photos/40/40?grayscale'} alt="" className="w-8 h-8 rounded-full bg-[#262626]" />{c.profiles?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={13} /></div>}</div><div className="flex-1"><p className="text-sm text-white"><span className="font-medium">@{c.profiles?.username}</span> <span className="font-light ml-2">{c.text}</span></p><p className="text- text-[#8a8a8a] mt-1">{formatTime(c.created_at)}</p></div><button onClick={() => setShowReportComment(c.id)} className="opacity-0 group-hover:opacity-100 p-1"><Flag className="w-3 h-3 text-[#8a8a8a]" /></button></div>))}
             </div>
-            {user && (<form onSubmit={submitComment} className="flex gap-3 p-4 border-t border-[#262626]"><div className="relative flex-1"><input value={commentText} onChange={e => handleCommentChange(e.target.value)} placeholder="Comentar..." className="w-full bg-transparent text-sm text-white outline-none" />{showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}</div><button type="submit" disabled={postingComment} className="text-sm text-white disabled:opacity-50">Postar</button></form>)}
+            {user && (<form onSubmit={submitComment} className="flex gap-3 p-4 border-t border-[#262626]"><div className="relative flex-1"><input value={commentText} onChange={e => handleCommentChange(e.target.value)} placeholder="Comentar..." className="w-full bg-transparent text-sm text-white outline-none" />{showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}</div><button type="submit" disabled={!commentText.trim() || postingComment} className="text-sm font-semibold text-white disabled:opacity-50">{postingComment? '...' : 'Postar'}</button></form>)}
           </div>
         </div>
       )}

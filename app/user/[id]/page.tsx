@@ -140,7 +140,7 @@ export default function UserPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w- min-h-screen bg-black text-white">
+      <div className="mx-auto max-w-[450px] min-h-screen bg-black text-white">
         {/* HEADER IGUAL PRINT */}
         <div className="flex items-center justify-between px-4 h- border-b border-[#262626]/0">
           <div className="flex items-center gap-3">
