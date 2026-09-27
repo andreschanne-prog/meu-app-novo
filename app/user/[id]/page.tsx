@@ -164,7 +164,14 @@ export default function UserPage() {
         <div className="flex items-center justify-between px-4 h- border-b border-[#262626]/0">
           <div className="flex items-center gap-3">
             <button onClick={()=>router.back()} className="p-1"><ArrowLeft className="w-6 h-6" /></button>
-            <h1 className="text- font-bold flex items-center gap-1">{profile.username} {profile.verificado && <BadgeCheck className="w-5 h-5 text-[#0095f6] fill-[#0095f6]" />}</h1>
+            <h1 className="text- font-bold flex items-center gap-1">
+              {profile.username}
+              {profile.verificado && (
+                <span className="ml-1 drop-shadow-[0_0_6px_rgba(212,175,55,0.6)]">
+                  <VerifiedBadge size={20} />
+                </span>
+              )}
+            </h1>
           </div>
           <div className="flex items-center gap-4">
             <Bell className="w-6 h-6" />
@@ -193,7 +200,10 @@ export default function UserPage() {
           </div>
 
           <div className="mt-3">
-            <h2 className="text- font-bold">{profile.full_name}</h2>
+            <h2 className="text- font-bold flex items-center gap-1.5">
+              {profile.full_name}
+              {profile.verificado && <VerifiedBadge size={18} />}
+            </h2>
             {canSeeInfo && profile.bio && <p className="text- leading- mt-1 whitespace-pre-wrap">{profile.bio}</p>}
             {canSeeInfo && locationText && <p className="text- mt-1 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />Mora em {locationText}</p>}
             {canSeeInfo && profile.relationship_status && <p className="text- mt-1">{RELATIONSHIP_LABELS[profile.relationship_status]}</p>}
@@ -202,6 +212,7 @@ export default function UserPage() {
           <div className="mt-3">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-[#1a1a1a] px-3 py-1.5 text-">
               <span className="font-bold">@</span>{profile.username}
+              {profile.verificado && <VerifiedBadge size={14} />}
             </div>
           </div>
 
@@ -250,7 +261,10 @@ export default function UserPage() {
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 p-0 sm:p-4" onClick={()=>setShowFollowers(false)}>
           <div className="w-full sm:max-w-md bg-[#111] rounded-t-xl sm:rounded-xl border border-[#262626] max-h- overflow-hidden" onClick={e=>e.stopPropagation()}>
             <div className="p-4 border-b border-[#262626] flex justify-between"><h3 className="font-bold">Seguidores</h3><button onClick={()=>setShowFollowers(false)}><X className="w-5 h-5" /></button></div>
-            <div className="overflow-y-auto p-2">{followersList.map((u:any)=><div key={u.id} onClick={()=>{setShowFollowers(false); router.push(`/user/${u.id}`)}} className="flex items-center gap-3 p-3 hover:bg-[#1a1a1a] rounded-lg cursor-pointer"><img src={u.avatar_url} className="w-10 h-10 rounded-full" /><div><p className="text-sm font-bold">@{u.username}</p><p className="text-xs text-[#a8a8a8]">{u.full_name}</p></div></div>)}</div>
+            <div className="overflow-y-auto p-2">
+              {loadingList? <div className="text-center py-6 text-[#666]">Carregando...</div> :
+              filteredFollowers.map((u:any)=><div key={u.id} onClick={()=>{setShowFollowers(false); router.push(`/user/${u.id}`)}} className="flex items-center gap-3 p-3 hover:bg-[#1a1a1a] rounded-lg cursor-pointer"><img src={u.avatar_url} className="w-10 h-10 rounded-full bg-[#222]" /><div className="flex items-center gap-1"><p className="text-sm font-bold">@{u.username}</p>{u.verificado && <VerifiedBadge size={14} />}</div></div>)}
+            </div>
           </div>
         </div>
       )}
@@ -258,7 +272,10 @@ export default function UserPage() {
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 p-0 sm:p-4" onClick={()=>setShowFollowing(false)}>
           <div className="w-full sm:max-w-md bg-[#111] rounded-t-xl sm:rounded-xl border border-[#262626] max-h- overflow-hidden" onClick={e=>e.stopPropagation()}>
             <div className="p-4 border-b border-[#262626] flex justify-between"><h3 className="font-bold">Seguindo</h3><button onClick={()=>setShowFollowing(false)}><X className="w-5 h-5" /></button></div>
-            <div className="overflow-y-auto p-2">{followingList.map((u:any)=><div key={u.id} onClick={()=>{setShowFollowing(false); router.push(`/user/${u.id}`)}} className="flex items-center gap-3 p-3 hover:bg-[#1a1a1a] rounded-lg cursor-pointer"><img src={u.avatar_url} className="w-10 h-10 rounded-full" /><div><p className="text-sm font-bold">@{u.username}</p><p className="text-xs text-[#a8a8a8]">{u.full_name}</p></div></div>)}</div>
+            <div className="overflow-y-auto p-2">
+              {loadingList? <div className="text-center py-6 text-[#666]">Carregando...</div> :
+              filteredFollowing.map((u:any)=><div key={u.id} onClick={()=>{setShowFollowing(false); router.push(`/user/${u.id}`)}} className="flex items-center gap-3 p-3 hover:bg-[#1a1a1a] rounded-lg cursor-pointer"><img src={u.avatar_url} className="w-10 h-10 rounded-full bg-[#222]" /><div className="flex items-center gap-1"><p className="text-sm font-bold">@{u.username}</p>{u.verificado && <VerifiedBadge size={14} />}</div></div>)}
+            </div>
           </div>
         </div>
       )}

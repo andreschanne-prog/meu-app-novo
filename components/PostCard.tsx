@@ -12,7 +12,7 @@ import { VerifiedBadge } from './VerifiedBadge'
 import OnlineBadge from './OnlineBadge'
 import type { ReportReason } from './ReportModal'
 
-type ProfileLite = { id: string; username: string; full_name: string; avatar_url: string; verificado?: boolean; online?: boolean | null; last_seen?: string | null }
+type ProfileLite = { id: string; username: string; full_name?: string; nome?: string; avatar_url: string; verificado?: boolean; online?: boolean | null; last_seen?: string | null }
 type Comment = { id: string; post_id: string; user_id: string; text: string; created_at: string; profiles?: ProfileLite }
 type Post = {
   id: string;
@@ -26,7 +26,7 @@ type Post = {
   like_count?: number;
   user_liked?: boolean
 }
-type Liker = { id: string; username: string; full_name: string; avatar_url: string }
+type Liker = { id: string; username: string; full_name?: string; nome?: string; avatar_url: string }
 
 const REPORT_REASONS: { v: ReportReason; l: string }[] = [
   { v: 'spam', l: 'É spam' },
@@ -45,11 +45,21 @@ function unwrapProfile<T>(value: T | T[] | null | undefined): T | undefined {
   if (!value) return undefined; return Array.isArray(value)? value[0] : value
 }
 
+// PEGA O NOME BONITO - sem @
+function getDisplayName(p?: ProfileLite | Liker | null): string {
+  if (!p) return 'usuário';
+  // @ts-ignore
+  return p.full_name || p.nome || p.username || 'usuário';
+}
+
 function MentionList({ users, onSelect }: { users: ProfileLite[]; onSelect: (user: ProfileLite) => void }) {
   return <div className="absolute bottom-full left-0 z-20 mb-2 w-full overflow-hidden rounded-xl border border-[#333] bg-[#161616] shadow-xl">
     {users.map(profile => <button key={profile.id} type="button" onClick={() => onSelect(profile)} className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#262626]">
       <img src={profile.avatar_url || 'https://picsum.photos/40/40?grayscale'} alt="" className="h-9 w-9 rounded-full object-cover" />
-      <span className="text-sm text-white">@{profile.username}</span>
+      <div className="flex flex-col">
+        <span className="text-sm text-white">{getDisplayName(profile)}</span>
+        <span className="text-xs text-[#8a8a8a]">@{profile.username}</span>
+      </div>
       {profile.verificado && <VerifiedBadge size={12} />}
     </button>)}
   </div>
@@ -102,17 +112,16 @@ export default function PostCard({ post }: { post: Post }) {
   useEffect(() => { if (showComments && comments.length === 0) loadComments() }, [showComments])
   useEffect(() => { if (showLikers && likers.length === 0) loadLikers() }, [showLikers])
 
-  // AJUSTE 1: pega os mais novos e inverte pra mostrar na ordem certa
   async function loadComments() {
     setLoadingComments(true)
-    const { data } = await supabase.from('comments').select('*, profiles(id, username, full_name, avatar_url, verificado)').eq('post_id', post.id).order('created_at', { ascending: false }).limit(20)
+    const { data } = await supabase.from('comments').select('*, profiles(id, username, nome, full_name, avatar_url, verificado)').eq('post_id', post.id).order('created_at', { ascending: false }).limit(20)
     const ordered = (data || []).reverse().map((row: any) => ({...row, profiles: unwrapProfile(row.profiles)}))
     setComments(ordered)
     setLoadingComments(false)
   }
 
   async function loadLikers() {
-    const { data } = await supabase.from('likes').select('profiles(id, username, full_name, avatar_url)').eq('post_id', post.id).order('created_at', { ascending: false }).limit(50)
+    const { data } = await supabase.from('likes').select('profiles(id, username, nome, full_name, avatar_url)').eq('post_id', post.id).order('created_at', { ascending: false }).limit(50)
     setLikers((data || []).map((row: any) => unwrapProfile(row.profiles)).filter(Boolean) as Liker[])
   }
 
@@ -122,11 +131,10 @@ export default function PostCard({ post }: { post: Post }) {
     const { error } = await supabase.rpc('toggle_like', { p_post_id: post.id })
     if (error) { setLiked(was); setLikeCount((p: number) => was? p+1 : p-1); toast.error('Erro ao curtir'); return }
     if (!was && post.user_id!== user.id) {
-      void sendPushNotification({ userId: post.user_id, title: 'Nova curtida no MISHH', body: `@${postProfile?.username || 'Alguém'} curtiu seu post.`, url: `/post/${post.id}` })
+      void sendPushNotification({ userId: post.user_id, title: 'Nova curtida no MISHH', body: `${getDisplayName(postProfile)} curtiu seu post.`, url: `/post/${post.id}` })
     }
   }
 
-  // AJUSTE 2: comentario otimista + finally pra nunca travar o botão
   async function submitComment(e: FormEvent) {
     e.preventDefault()
     if (!user ||!commentText.trim() || postingComment) return
@@ -134,7 +142,6 @@ export default function PostCard({ post }: { post: Post }) {
     const textToSubmit = commentText.trim()
     const tempId = `temp-${Date.now()}`
 
-    // cria comentario fake pra aparecer na hora
     const optimistic: Comment = {
       id: tempId,
       post_id: post.id,
@@ -144,7 +151,8 @@ export default function PostCard({ post }: { post: Post }) {
       profiles: {
         id: user.id,
         username: user.user_metadata?.username || 'voce',
-        full_name: user.user_metadata?.full_name || '',
+        full_name: user.user_metadata?.full_name || user.user_metadata?.nome || '',
+        nome: user.user_metadata?.nome || user.user_metadata?.full_name || '',
         avatar_url: user.user_metadata?.avatar_url || '',
       }
     }
@@ -155,15 +163,13 @@ export default function PostCard({ post }: { post: Post }) {
     setPostingComment(true)
 
     try {
-      const { data, error } = await supabase.from('comments').insert({ post_id: post.id, user_id: user.id, text: textToSubmit }).select('*, profiles(id, username, full_name, avatar_url, verificado)').single()
+      const { data, error } = await supabase.from('comments').insert({ post_id: post.id, user_id: user.id, text: textToSubmit }).select('*, profiles(id, username, nome, full_name, avatar_url, verificado)').single()
       if (error) throw error
 
-      // troca o temporario pelo real do banco
       setComments(p => p.map(c => c.id === tempId? {...data, profiles: unwrapProfile((data as any).profiles) } as Comment : c))
       toast.success('Comentário!')
-      void notifyMentionedUsers({ actorId: user.id, text: textToSubmit, body: `@${postProfile?.username || 'Alguém'} marcou você em um comentário.`, url: `/post/${post.id}` })
+      void notifyMentionedUsers({ actorId: user.id, text: textToSubmit, body: `${getDisplayName(postProfile)} marcou você em um comentário.`, url: `/post/${post.id}` })
     } catch (err: any) {
-      // se deu erro, remove o otimista e devolve o texto
       setComments(p => p.filter(c => c.id!== tempId))
       setCommentText(textToSubmit)
       toast.error(err.message || 'Erro ao comentar')
@@ -178,7 +184,7 @@ export default function PostCard({ post }: { post: Post }) {
     const ids = (follows || []).map((follow: any) => follow.following_id)
     if (!ids.length) { setMentionUsers([]); return }
     const cleanQuery = query.trim()
-    let request = supabase.from('profiles').select('id, username, full_name, avatar_url, verificado').in('id', ids).limit(6)
+    let request = supabase.from('profiles').select('id, username, nome, full_name, avatar_url, verificado').in('id', ids).limit(6)
     if (cleanQuery) request = request.ilike('username', `%${cleanQuery}%`)
     const { data } = await request
     setMentionUsers((data || []) as ProfileLite[])
@@ -211,7 +217,7 @@ export default function PostCard({ post }: { post: Post }) {
               {postProfile?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={15} /></div>}
               {showOnline && <OnlineBadge size={10} className="-bottom-0.5 -right-0.5" />}
             </div>
-            <span className="text-sm font-medium text-white">@{postProfile?.username || 'usuário'}</span>
+            <span className="text-sm font-medium text-white">{getDisplayName(postProfile)}</span>
           </button>
           <div className="relative">
             <button onClick={() => setShowMenu(!showMenu)} className="p-2 text-[#a8a8a8] hover:text-white"><MoreHorizontal className="w-5 h-5" /></button>
@@ -277,14 +283,13 @@ export default function PostCard({ post }: { post: Post }) {
             <button onClick={() => setShowComments(!showComments)} className="p-2 text-white"><MessageCircle className="w-6 h-6" /></button>
           </div>
           {likeCount > 0? (<button onClick={() => setShowLikers(true)} className="mt-1 text-sm font-medium text-white">{likeCount} curtidas</button>) : (<p className="mt-1 text-sm text-[#8a8a8a]">Seja o primeiro a curtir</p>)}
-          {allImages.length > 0 && post.caption && (<p className="mt-2 text-sm text-white"><span className="font-medium mr-2">@{postProfile?.username}</span><span className="font-light">{post.caption}</span></p>)}
+          {allImages.length > 0 && post.caption && (<p className="mt-2 text-sm text-white"><span className="font-medium mr-2">{getDisplayName(postProfile)}</span><span className="font-light">{post.caption}</span></p>)}
 
-          {/* AJUSTE 3: MOSTRA OS COMENTÁRIOS EMBAIXO DA FOTO NO FEED */}
           {comments.length > 0 && (
             <div className="mt-2 space-y-1">
               {comments.slice(-2).map(c => (
                 <p key={c.id} className="text-sm text-white leading-snug">
-                  <span className="font-semibold">@{c.profiles?.username || 'voce'}</span>
+                  <span className="font-semibold">{getDisplayName(c.profiles)}</span>
                   <span className="font-light ml-2">{c.text}</span>
                 </p>
               ))}
@@ -316,7 +321,7 @@ export default function PostCard({ post }: { post: Post }) {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setShowLikers(false)}>
           <div className="bg-[#0a0a0a] w-full sm:w- rounded-t-3xl sm:rounded-2xl flex flex-col max-h- border border-[#262626]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]"><div className="w-8" /><h3 className="font-medium text-white">Curtido por</h3><button onClick={() => setShowLikers(false)}><X className="w-6 h-6 text-white" /></button></div>
-            <div className="flex-1 overflow-y-auto p-3">{likers.map(l => (<button key={l.id} onClick={() => { setShowLikers(false); router.push('/user/' + l.id) }} className="flex items-center gap-3 w-full p-2 hover:bg-[#1a1a1a] rounded-xl"><img src={l.avatar_url} className="w-11 h-11 rounded-full" alt="" /><div className="text-left"><p className="text-sm text-white">@{l.username}</p><p className="text-xs text-[#8a8a8a]">{l.full_name}</p></div></button>))}</div>
+            <div className="flex-1 overflow-y-auto p-3">{likers.map(l => (<button key={l.id} onClick={() => { setShowLikers(false); router.push('/user/' + l.id) }} className="flex items-center gap-3 w-full p-2 hover:bg-[#1a1a1a] rounded-xl"><img src={l.avatar_url} className="w-11 h-11 rounded-full" alt="" /><div className="text-left"><p className="text-sm text-white">{getDisplayName(l)}</p><p className="text-xs text-[#8a8a8a]">@{l.username}</p></div></button>))}</div>
           </div>
         </div>
       )}
@@ -326,7 +331,7 @@ export default function PostCard({ post }: { post: Post }) {
           <div className="bg-[#0a0a0a] w-full sm:w- rounded-t-3xl sm:rounded-2xl flex flex-col max-h- border border-[#262626]" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]"><button onClick={() => setShowComments(false)}><X className="w-6 h-6 text-white" /></button><h3 className="font-medium text-white">Comentários</h3><div className="w-8" /></div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {loadingComments? <p className="text-sm text-[#8a8a8a]">Carregando...</p> : comments.map(c => (<div key={c.id} className="flex gap-3 group"><div className="relative shrink-0"><img src={c.profiles?.avatar_url || 'https://picsum.photos/40/40?grayscale'} alt="" className="w-8 h-8 rounded-full bg-[#262626]" />{c.profiles?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={13} /></div>}</div><div className="flex-1"><p className="text-sm text-white"><span className="font-medium">@{c.profiles?.username}</span> <span className="font-light ml-2">{c.text}</span></p><p className="text- text-[#8a8a8a] mt-1">{formatTime(c.created_at)}</p></div><button onClick={() => setShowReportComment(c.id)} className="opacity-0 group-hover:opacity-100 p-1"><Flag className="w-3 h-3 text-[#8a8a8a]" /></button></div>))}
+              {loadingComments? <p className="text-sm text-[#8a8a8a]">Carregando...</p> : comments.map(c => (<div key={c.id} className="flex gap-3 group"><div className="relative shrink-0"><img src={c.profiles?.avatar_url || 'https://picsum.photos/40/40?grayscale'} alt="" className="w-8 h-8 rounded-full bg-[#262626]" />{c.profiles?.verificado && <div className="absolute -bottom-1 -right-1"><VerifiedBadge size={13} /></div>}</div><div className="flex-1"><p className="text-sm text-white"><span className="font-medium">{getDisplayName(c.profiles)}</span> <span className="font-light ml-2">{c.text}</span></p><p className="text- text-[#8a8a8a] mt-1">{formatTime(c.created_at)}</p></div><button onClick={() => setShowReportComment(c.id)} className="opacity-0 group-hover:opacity-100 p-1"><Flag className="w-3 h-3 text-[#8a8a8a]" /></button></div>))}
             </div>
             {user && (<form onSubmit={submitComment} className="flex gap-3 p-4 border-t border-[#262626]"><div className="relative flex-1"><input value={commentText} onChange={e => handleCommentChange(e.target.value)} placeholder="Comentar..." className="w-full bg-transparent text-sm text-white outline-none" />{showMentions && mentionUsers.length > 0 && <MentionList users={mentionUsers} onSelect={selectMention} />}</div><button type="submit" disabled={!commentText.trim() || postingComment} className="text-sm font-semibold text-white disabled:opacity-50">{postingComment? '...' : 'Postar'}</button></form>)}
           </div>
@@ -334,7 +339,7 @@ export default function PostCard({ post }: { post: Post }) {
       )}
 
       {showReportPost && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="bg-[#0a0a0a] w-full max-w-sm rounded-2xl border border-[#262626] p-2">{REPORT_REASONS.map(r => (<button key={r.v} onClick={() => reportPost(r.v)} className="w-full p-4 text-left text-white hover:bg-[#1a1a1a] rounded-xl">{r.l}</button>))}<button onClick={() => setShowReportPost(false)} className="w-full p-3 text-[#8a8a8a]">Cancelar</button></div></div>)}
-      {showBlock && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="bg-[#0a0a0a] w-full max-w-sm rounded-2xl p-5 border border-[#262626]"><h3 className="text-white font-medium">Bloquear @{postProfile?.username}?</h3><button onClick={blockUser} className="w-full mt-4 p-3 bg-red-500 rounded-xl text-white">Bloquear</button><button onClick={() => setShowBlock(false)} className="w-full mt-2 p-3 text-[#8a8a8a]">Cancelar</button></div></div>)}
+      {showBlock && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="bg-[#0a0a0a] w-full max-w-sm rounded-2xl p-5 border border-[#262626]"><h3 className="text-white font-medium">Bloquear {getDisplayName(postProfile)}?</h3><button onClick={blockUser} className="w-full mt-4 p-3 bg-red-500 rounded-xl text-white">Bloquear</button><button onClick={() => setShowBlock(false)} className="w-full mt-2 p-3 text-[#8a8a8a]">Cancelar</button></div></div>)}
       {showReportComment && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"><div className="bg-[#0a0a0a] w-full max-w-sm rounded-2xl border border-[#262626] p-2">{REPORT_REASONS.map(r => (<button key={r.v} onClick={() => { const c = comments.find(x=>x.id===showReportComment); if(c) reportComment(showReportComment, r.v, c.user_id) }} className="w-full p-4 text-left text-white hover:bg-[#1a1a1a] rounded-xl">{r.l}</button>))}<button onClick={() => setShowReportComment(null)} className="w-full p-3 text-[#8a8a8a]">Cancelar</button></div></div>)}
     </>
   )
