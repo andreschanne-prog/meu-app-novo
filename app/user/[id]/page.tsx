@@ -40,6 +40,7 @@ export default function UserPage() {
   const [followingList, setFollowingList] = useState<FollowUser[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [searchFollow, setSearchFollow] = useState('')
+  const [isChatting, setIsChatting] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -113,19 +114,38 @@ export default function UserPage() {
 
   async function startChat() {
     if (!me || me.id === id) return
-    const { data: myConvs } = await supabase.from('conversation_participants').select('conversation_id').eq('user_id', me.id)
-    let convId = null
-    if (myConvs?.length) {
-      const ids = myConvs.map(e => e.conversation_id)
-      const { data: shared } = await supabase.from('conversation_participants').select('conversation_id').eq('user_id', id).in('conversation_id', ids).limit(1)
-      convId = shared?.[0]?.conversation_id
+    if (isChatting) return
+    setIsChatting(true)
+    try {
+      const { data: myConvs, error: myErr } = await supabase.from('conversation_participants').select('conversation_id').eq('user_id', me.id)
+      if (myErr) throw myErr
+
+      let convId = null
+      if (myConvs?.length) {
+        const ids = myConvs.map(e => e.conversation_id)
+        const { data: shared, error: sharedErr } = await supabase.from('conversation_participants').select('conversation_id').eq('user_id', id).in('conversation_id', ids).limit(1)
+        if (sharedErr) throw sharedErr
+        convId = shared?.[0]?.conversation_id
+      }
+
+      if (!convId) {
+        const { data: c, error: cErr } = await supabase.from('conversations').insert({}).select('id').single()
+        if (cErr) throw cErr
+        convId = c!.id
+
+        const { error: pErr } = await supabase.from('conversation_participants').insert([
+          { conversation_id: convId, user_id: me.id },
+          { conversation_id: convId, user_id: id as string }
+        ])
+        if (pErr) throw pErr
+      }
+
+      router.push(`/chat?id=${convId}`)
+    } catch (err: any) {
+      console.error('[startChat error]', err)
+      toast.error('Erro ao abrir chat: ' + (err.message || 'tente novamente'))
+      setIsChatting(false)
     }
-    if (!convId) {
-      const { data: c } = await supabase.from('conversations').insert({}).select('id').single()
-      convId = c!.id
-      await supabase.from('conversation_participants').insert([{ conversation_id: convId, user_id: me.id }, { conversation_id: convId, user_id: id }])
-    }
-    router.push(`/chat?id=${convId}`)
   }
 
   if (!profile) return <AppShell><div className="py-10 text-center text-[#a8a8a8]">Carregando...</div></AppShell>
@@ -141,7 +161,6 @@ export default function UserPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-[450px] min-h-screen bg-black text-white">
-        {/* HEADER IGUAL PRINT */}
         <div className="flex items-center justify-between px-4 h- border-b border-[#262626]/0">
           <div className="flex items-center gap-3">
             <button onClick={()=>router.back()} className="p-1"><ArrowLeft className="w-6 h-6" /></button>
@@ -156,10 +175,8 @@ export default function UserPage() {
           </div>
         </div>
 
-        {/* AVATAR + STATS IGUAL PRINT */}
         <div className="px-4 pt-3">
           <div className="flex items-center gap-5">
-            {/* ANEL DEGRADE IGUAL INSTAGRAM */}
             <div className="h-[130px] w-[130px] rounded-full p- bg-gradient-to-tr from-[#feda75] via-[#fa7e1e] via-[#d62976] to-[#962fbf]">
               <div className="h-full w-full rounded-full bg-black p-">
                 <div className="h-full w-full rounded-full overflow-hidden bg-[#1d1d1d]">
@@ -175,7 +192,6 @@ export default function UserPage() {
             </div>
           </div>
 
-          {/* NOME + BIO */}
           <div className="mt-3">
             <h2 className="text- font-bold">{profile.full_name}</h2>
             {canSeeInfo && profile.bio && <p className="text- leading- mt-1 whitespace-pre-wrap">{profile.bio}</p>}
@@ -183,14 +199,12 @@ export default function UserPage() {
             {canSeeInfo && profile.relationship_status && <p className="text- mt-1">{RELATIONSHIP_LABELS[profile.relationship_status]}</p>}
           </div>
 
-          {/* LINK TIPO THREADS PILULA */}
           <div className="mt-3">
             <div className="inline-flex items-center gap-1.5 rounded-full bg-[#1a1a1a] px-3 py-1.5 text-">
               <span className="font-bold">@</span>{profile.username}
             </div>
           </div>
 
-          {/* CONTADOR DE LIKE SEMPRE LARANJADO DESTACADO */}
           <div className="mt-3">
             <div className="inline-flex items-center gap-2 rounded-full bg-[#ff6a00] px-3.5 py-1.5 shadow-[0_0_15px_rgba(255,106,0,0.3)]">
               <div className="h-5 w-5 rounded-full bg-white/20 grid place-items-center">
@@ -202,19 +216,19 @@ export default function UserPage() {
             </div>
           </div>
 
-          {/* BOTÕES SEGUINDO / MENSAGEM IGUAL PRINT */}
           {!isOwnProfile && (
             <div className="mt-4 flex gap-2">
               {!following &&!requested && <button onClick={follow} className="flex-1 h- rounded-lg bg-[#0095f6] text- font-bold">Seguir</button>}
               {following && <button className="flex-1 h- rounded-lg bg-[#262626] text- font-bold flex items-center justify-center gap-1">Seguindo <span className="text-">▼</span></button>}
               {requested && <button className="flex-1 h- rounded-lg bg-[#262626] text- font-bold">Solicitado</button>}
-              <button onClick={startChat} className="flex-1 h- rounded-lg bg-[#262626] text- font-bold">Mensagem</button>
+              <button onClick={startChat} disabled={isChatting} className="flex-1 h- rounded-lg bg-[#262626] text- font-bold disabled:opacity-50">
+                {isChatting? 'Abrindo...' : 'Mensagem'}
+              </button>
               <button className="w- h- rounded-lg bg-[#262626] grid place-items-center"><UserPlus className="w-4 h-4" /></button>
             </div>
           )}
         </div>
 
-        {/* TABS IGUAL PRINT */}
         <div className="mt-5 border-t border-[#262626] flex">
           <button onClick={()=>setActiveTab('fotos')} className={`flex-1 h- grid place-items-center border-t ${activeTab==='fotos'? 'border-white text-white' : 'border-transparent text-[#666]'}`}><Grid3x3 className="w-6 h-6" /></button>
           <button className="flex-1 h- grid place-items-center border-t border-transparent text-[#666]"><Clapperboard className="w-5 h-5" /></button>
@@ -222,7 +236,6 @@ export default function UserPage() {
           <button className="flex-1 h- grid place-items-center border-t border-transparent text-[#666]"><UserSquare2 className="w-6 h-6" /></button>
         </div>
 
-        {/* GRID */}
         <div>
           {restrictedAndHidden? <div className="py-16 text-center text-sm text-[#a8a8a8]"><Lock className="w-8 h-8 mx-auto mb-2" />Conta privada</div> :
             postsComFoto.length===0? <div className="py-16 text-center text-sm text-[#a8a8a8]">Nenhuma foto</div> :

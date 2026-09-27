@@ -16,9 +16,6 @@ const MAX_TEXT_LENGTH = 2000
 const CARD_SIZE = "w-full max-w- mx-auto"
 const POSTS_PER_AD = 7
 
-const CLOUD_NAME = 'nzj72eu0'
-const UPLOAD_PRESET = 'mishh_upload' // <- o que você acabou de criar
-
 export default function FeedPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
@@ -36,18 +33,18 @@ export default function FeedPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  async function uploadToCloudinary(file: File): Promise<string> {
+  // AGORA VIA PYTHON - SEGURO
+  async function uploadViaPython(file: File): Promise<string> {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('upload_preset', UPLOAD_PRESET)
 
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+    const res = await fetch('/api/post', {
       method: 'POST',
       body: formData,
     })
     const data = await res.json()
-    if (!data.secure_url) throw new Error(data.error?.message || 'Erro no upload Cloudinary')
-    return data.secure_url
+    if (!res.ok) throw new Error(data.error || 'Erro no servidor')
+    return data.url
   }
 
   async function submitTextPost() {
@@ -59,26 +56,26 @@ export default function FeedPage() {
     try {
       let imageUrl = ''
       if (selectedImage) {
-        toast.loading('Enviando imagem pro Cloudinary...')
-        imageUrl = await uploadToCloudinary(selectedImage)
+        toast.loading('Otimizando imagem...')
+        imageUrl = await uploadViaPython(selectedImage)
       }
 
       const { data, error } = await supabase
-       .from('posts')
-       .insert({
+      .from('posts')
+      .insert({
           user_id: user.id,
-          image_url: imageUrl, // AGORA SIM VAI PRO CLOUDINARY
+          image_url: imageUrl,
           filter: 'normal',
           caption: text,
           hashtags: extractHashtags(text).join(','),
         })
-       .select('*, profiles(id, username, full_name, avatar_url, verificado, online, last_seen), likes(count)')
-       .single()
+      .select('*, profiles(id, username, full_name, avatar_url, verificado, online, last_seen), likes(count)')
+      .single()
 
       if (error) throw error
 
       const inserted = {
-       ...data,
+      ...data,
         like_count: (data as any)?.likes?.[0]?.count?? 0,
         user_liked: false,
         profiles: (data as any)?.profiles || null,
@@ -102,12 +99,15 @@ export default function FeedPage() {
   function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
+      if(file.size > 10 * 1024 * 1024){
+        toast.error('Imagem muito grande. Máx 10MB')
+        return
+      }
       setSelectedImage(file)
       setPreviewUrl(URL.createObjectURL(file))
     }
   }
 
-  //... resto do seu código de mentions e useEffect continua igual
   function handleTextChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const val = e.target.value.slice(0, MAX_TEXT_LENGTH)
     const pos = e.target.selectionStart
@@ -127,16 +127,10 @@ export default function FeedPage() {
     if (!user) return
     const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', user.id).limit(50)
     const ids = follows?.map((f: any) => f.following_id) || []
-
-    if (!ids.length) {
-      setMentionUsers([])
-      return
-    }
-
+    if (!ids.length) { setMentionUsers([]); return }
     const cleanQuery = q.trim()
     let query = supabase.from('profiles').select('id, username, full_name, avatar_url, verificado').in('id', ids).limit(6)
     if (cleanQuery) query = query.ilike('username', `%${cleanQuery}%`)
-
     const { data } = await query
     setMentionUsers(data || [])
   }
@@ -179,7 +173,7 @@ export default function FeedPage() {
         likedIds = new Set(((likes as any) || []).map((l: any) => l.post_id))
       }
       const enriched = ((postsData as any) || []).map((p: any) => ({
-       ...p,
+      ...p,
         like_count: p.likes?.[0]?.count?? 0,
         user_liked: likedIds.has(p.id),
       }))
