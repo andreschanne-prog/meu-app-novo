@@ -74,12 +74,12 @@ export default function RankingPage() {
     if (!selectedUF) { setCities([]); setSelectedCity(null); return }
     setLoadingCities(true)
     fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${selectedUF}/municipios`)
-    .then((r) => r.json())
-    .then((data: any[]) => {
+   .then((r) => r.json())
+   .then((data: any[]) => {
         setCities(data.map((c) => c.nome).sort((a: string, b: string) => a.localeCompare(b)))
         setLoadingCities(false)
       })
-    .catch(() => setLoadingCities(false))
+   .catch(() => setLoadingCities(false))
   }, [selectedUF])
 
   useEffect(() => {
@@ -90,7 +90,6 @@ export default function RankingPage() {
       if (scope === 'state') { args.p_country = myCtx.country || 'Brasil'; args.p_state = selectedUF || myCtx.state }
       if (scope === 'city') { args.p_country = myCtx.country || 'Brasil'; args.p_state = selectedUF || myCtx.state; args.p_city = selectedCity || myCtx.city }
       const { data } = await supabase.rpc('get_ranking', args)
-      // AQUI A REGRA QUE VOCÊ PEDIU
       let limit = 30
       if (scope === 'state') limit = 10
       if (scope === 'city') limit = 10
@@ -118,21 +117,21 @@ export default function RankingPage() {
       {(scope === 'state' || scope === 'city') && (
         <div className="mb-6 grid grid-cols-2 gap-2">
           <button onClick={() => setShowStateModal(true)} className="flex items-center justify-between rounded-2xl border border-[#262626] bg-[#171717] px-4 py-3.5 text-left">
-            <div className="flex items-center gap-2.5 min-w-0"><div className="h-8 w-8 rounded-full bg-[#262626] flex items-center justify-center"><MapPin className="w-4 h-4 text-white" /></div><div className="min-w-0"><p className="text-[10px] uppercase tracking-widest text-[#a8a8a8]">Estado</p><p className="text-sm text-white truncate font-light">{selectedUF? ESTADOS_BRASIL.find((e) => e.uf === selectedUF)?.nome : 'Todos'}</p></div></div><ChevronDown className="w-4 h-4 text-[#a8a8a8] shrink-0" />
+            <div className="flex items-center gap-2.5 min-w-0"><div className="h-8 w-8 rounded-full bg-[#262626] flex items-center justify-center"><MapPin className="w-4 h-4 text-white" /></div><div className="min-w-0"><p className="text- uppercase tracking-widest text-[#a8a8a8]">Estado</p><p className="text-sm text-white truncate font-light">{selectedUF? ESTADOS_BRASIL.find((e) => e.uf === selectedUF)?.nome : 'Todos'}</p></div></div><ChevronDown className="w-4 h-4 text-[#a8a8a8] shrink-0" />
           </button>
           <button onClick={() => { if (selectedUF) setShowCityModal(true) }} disabled={!selectedUF} className={`flex items-center justify-between rounded-2xl border px-4 py-3.5 text-left ${!selectedUF? 'border-[#1a1a1a] bg-[#0f0f0f] opacity-50' : 'border-[#262626] bg-[#171717]'}`}>
-            <div className="flex items-center gap-2.5 min-w-0"><div className="h-8 w-8 rounded-full bg-[#262626] flex items-center justify-center"><MapPin className="w-4 h-4 text-white" /></div><div className="min-w-0"><p className="text-[10px] uppercase tracking-widest text-[#a8a8a8]">Cidade</p><p className="text-sm text-white truncate font-light">{selectedCity || (selectedUF? 'Todas' : 'Escolha um estado')}</p></div></div><ChevronDown className="w-4 h-4 text-[#a8a8a8] shrink-0" />
+            <div className="flex items-center gap-2.5 min-w-0"><div className="h-8 w-8 rounded-full bg-[#262626] flex items-center justify-center"><MapPin className="w-4 h-4 text-white" /></div><div className="min-w-0"><p className="text- uppercase tracking-widest text-[#a8a8a8]">Cidade</p><p className="text-sm text-white truncate font-light">{selectedCity || (selectedUF? 'Todas' : 'Escolha um estado')}</p></div></div><ChevronDown className="w-4 h-4 text-[#a8a8a8] shrink-0" />
           </button>
         </div>
       )}
 
       {showStateModal && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4" onClick={() => setShowStateModal(false)}>
-          <div className="w-full sm:max-w-md h-[85vh] sm:h-[80vh] rounded-t-[24px] sm:rounded-[24px] bg-[#111] border border-[#262626] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full sm:max-w-md h- sm:h- rounded-t- sm:rounded- bg-[#111] border border-[#262626] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="shrink-0 p-5 border-b border-[#262626] bg-[#111]">
               <div className="flex items-center justify-between mb-4"><h3 className="text-white font-light text-base">Selecione o Estado</h3><button onClick={() => setShowStateModal(false)} className="p-2.5 rounded-full bg-[#1a1a1a]"><X className="w-4 h-4 text-white" /></button></div>
               <div className="relative"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a8a8a8]" /><input autoFocus value={searchState} onChange={(e) => setSearchState(e.target.value)} placeholder="Buscar estado... ex: São Paulo" className="w-full rounded-full bg-[#171717] border border-[#262626] pl-11 pr-10 py-3.5 text-sm text-white outline-none" />{searchState && <button onClick={() => setSearchState('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1"><X className="w-4 h-4 text-[#a8a8a8]" /></button>}</div>
-              <p className="mt-3 text-[11px] text-[#666] flex items-center gap-1"><ArrowDown className="w-3 h-3" /> {filteredStates.length} estados • arraste pra ver todos</p>
+              <p className="mt-3 text- text-[#666] flex items-center gap-1"><ArrowDown className="w-3 h-3" /> {filteredStates.length} estados • arraste pra ver todos</p>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
               <button onClick={() => { setSelectedUF(null); setSelectedCity(null); setShowStateModal(false) }} className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-[#171717] text-left"><span className="text-sm text-white font-light">Todos os estados</span>{!selectedUF && <Check className="w-4 h-4 text-white" />}</button>
@@ -144,11 +143,11 @@ export default function RankingPage() {
 
       {showCityModal && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4" onClick={() => setShowCityModal(false)}>
-          <div className="w-full sm:max-w-md h-[85vh] sm:h-[80vh] rounded-t-[24px] sm:rounded-[24px] bg-[#111] border border-[#262626] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full sm:max-w-md h- sm:h- rounded-t- sm:rounded- bg-[#111] border border-[#262626] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="shrink-0 p-5 border-b border-[#262626] bg-[#111]">
               <div className="flex items-center justify-between mb-4"><h3 className="text-white font-light text-base">Cidades de {selectedUF}</h3><button onClick={() => setShowCityModal(false)} className="p-2.5 rounded-full bg-[#1a1a1a]"><X className="w-4 h-4 text-white" /></button></div>
               <div className="relative"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#a8a8a8]" /><input autoFocus value={searchCity} onChange={(e) => setSearchCity(e.target.value)} placeholder="Buscar cidade..." className="w-full rounded-full bg-[#171717] border border-[#262626] pl-11 pr-10 py-3.5 text-sm text-white outline-none" />{searchCity && <button onClick={() => setSearchCity('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1"><X className="w-4 h-4 text-[#a8a8a8]" /></button>}</div>
-              <p className="mt-3 text-[11px] text-[#666] flex items-center gap-1"><ArrowDown className="w-3 h-3" /> {loadingCities? 'Carregando...' : `${filteredCities.length} cidades • arraste pra ver todas`}</p>
+              <p className="mt-3 text- text-[#666] flex items-center gap-1"><ArrowDown className="w-3 h-3" /> {loadingCities? 'Carregando...' : `${filteredCities.length} cidades • arraste pra ver todas`}</p>
             </div>
             <div className="flex-1 overflow-y-auto p-2">
               {loadingCities? (<div className="py-16 text-center"><div className="animate-spin w-6 h-6 border-2 border-[#333] border-t-white rounded-full mx-auto mb-3" /><p className="text-[#a8a8a8] text-sm">Carregando cidades...</p></div>) : (<><button onClick={() => { setSelectedCity(null); setShowCityModal(false) }} className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-[#171717] text-left"><span className="text-sm text-white font-light">Todas as cidades</span>{!selectedCity && <Check className="w-4 h-4 text-white" />}</button>{filteredCities.map((city) => (<button key={city} onClick={() => { setSelectedCity(city); setShowCityModal(false); setScope('city') }} className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl hover:bg-[#171717] text-left"><span className="text-sm text-white font-light truncate pr-2">{city}</span>{selectedCity === city && <Check className="w-4 h-4 text-white shrink-0" />}</button>))}{filteredCities.length === 0 && <p className="text-center py-10 text-[#666] text-sm">Nenhuma cidade encontrada</p>}</>)}
@@ -170,8 +169,16 @@ export default function RankingPage() {
             <li key={it.user_id} className={`relative p-3 rounded-2xl flex items-center gap-3 border ${medalhaClasse}`}>
               {i < 3 && <div className="absolute inset-0 rounded-2xl bg-[#0a0a0a] pointer-events-none" />}
               <div className="relative z-10 w-9 flex items-center justify-center shrink-0"><Medalha posicao={i + 1} /></div>
-              <div className="relative z-10 shrink-0"><div className={`w-11 h-11 rounded-full bg-[#262626] overflow-hidden ${it.verificado? 'ring-2 ring-[#D4AF37] ring-offset-2 ring-offset-[#0a0a0a]' : ''}`}>{it.avatar_url? <img src={it.avatar_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#a8a8a8] text-sm">{it.username?.[0]?.toUpperCase()}</div>}</div>{isUserOnline(it) &&!it.verificado && <OnlineBadge size={12} />}{it.verificado && <div className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={16} /></div>}</div>
-              <div className="relative z-10 flex-1 min-w-0"><div className="text-sm truncate text-white">@{it.username}</div><div className="text-[11px] text-[#a8a8a8] truncate">{it.city} · {it.state}</div></div>
+              <div className="relative z-10 shrink-0">
+                <div className={`w-11 h-11 rounded-full bg-[#262626] overflow-hidden ${it.verificado? 'ring-2 ring-[#D4AF37] ring-offset-2 ring-offset-[#0a0a0a]' : ''}`}>
+                  {it.avatar_url? <img src={it.avatar_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#a8a8a8] text-sm">{(it.full_name || it.username)?.[0]?.toUpperCase()}</div>}
+                </div>
+                {isUserOnline(it) &&!it.verificado && <OnlineBadge size={12} />}{it.verificado && <div className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={16} /></div>}
+              </div>
+              <div className="relative z-10 flex-1 min-w-0">
+                <div className="text-sm truncate text-white">{it.full_name || it.username}</div>
+                <div className="text- text-[#a8a8a8] truncate">{it.city} · {it.state}</div>
+              </div>
               <div className="relative z-10 text-white text-sm shrink-0">{it.total_likes}</div>
             </li>
           )

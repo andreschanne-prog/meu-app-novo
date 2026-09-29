@@ -72,8 +72,19 @@ export default function UserPage() {
       const mapped = (ps || []).map((p: any) => ({...p, profiles: prof, like_count: p.likes?.[0]?.count?? 0 }))
       setPosts(mapped)
       setCounts(c => ({...c, posts: mapped.filter((p:any)=>p.image_url||p.media_url||p.photo_url).length }))
-      const { data: tl } = await supabase.rpc('get_total_likes_for_user', { p_user_id: id })
-      setTotalLikes(Number(tl || 0))
+
+      // CORREÇÃO: LIKES QUE RECEBEU
+      const postIds = mapped.map((p: any) => p.id)
+      if (postIds.length > 0) {
+        const { count } = await supabase
+         .from('likes')
+         .select('*', { count: 'exact', head: true })
+         .in('post_id', postIds)
+        setTotalLikes(count || 0)
+      } else {
+        setTotalLikes(0)
+      }
+
       if (me) {
         const { data: f } = await supabase.from('follows').select('*').eq('follower_id', me.id).eq('following_id', id).maybeSingle()
         setFollowing(!!f)
@@ -160,7 +171,7 @@ export default function UserPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-[450px] min-h-screen bg-black text-white">
+      <div className="mx-auto max-w- min-h-screen bg-black text-white">
         <div className="flex items-center justify-between px-4 h- border-b border-[#262626]/0">
           <div className="flex items-center gap-3">
             <button onClick={()=>router.back()} className="p-1"><ArrowLeft className="w-6 h-6" /></button>
@@ -184,7 +195,7 @@ export default function UserPage() {
 
         <div className="px-4 pt-3">
           <div className="flex items-center gap-5">
-            <div className="h-[130px] w-[130px] rounded-full p- bg-gradient-to-tr from-[#feda75] via-[#fa7e1e] via-[#d62976] to-[#962fbf]">
+            <div className="h-24 w-24 rounded-full p- bg-gradient-to-tr from-[#feda75] via-[#fa7e1e] via-[#d62976] to-[#962fbf]">
               <div className="h-full w-full rounded-full bg-black p-">
                 <div className="h-full w-full rounded-full overflow-hidden bg-[#1d1d1d]">
                   {profile.avatar_url? <img src={profile.avatar_url} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-2xl">{profile.username?.[0]?.toUpperCase()}</div>}

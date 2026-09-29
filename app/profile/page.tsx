@@ -48,10 +48,23 @@ export default function ProfilePage() {
     if (!user) return
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
+
     const { data: ps } = await supabase.from('posts').select('*, likes(count)').eq('user_id', user.id).order('created_at', { ascending: false })
-    setPosts((ps || []).map((p: any) => ({...p, profiles: prof, like_count: p.likes?.[0]?.count?? 0 })))
-    const { data: tl } = await supabase.rpc('get_total_likes_for_user', { p_user_id: user.id })
-    setTotalLikes(Number(tl || 0))
+    const mappedPosts = (ps || []).map((p: any) => ({...p, profiles: prof, like_count: p.likes?.[0]?.count?? 0 }))
+    setPosts(mappedPosts)
+
+    // CORREÇÃO: conta likes que você GANHOU (nos seus posts)
+    const postIds = mappedPosts.map((p: any) => p.id)
+    if (postIds.length > 0) {
+      const { count: likesRecebidos } = await supabase
+       .from('likes')
+       .select('*', { count: 'exact', head: true })
+       .in('post_id', postIds)
+      setTotalLikes(likesRecebidos || 0)
+    } else {
+      setTotalLikes(0)
+    }
+
     const [{ count: followersCount }, { count: followingCount }] = await Promise.all([
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', user.id),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', user.id),
@@ -144,7 +157,6 @@ export default function ProfilePage() {
 
   return (
     <AppShell>
-      {/* TOP SEM O mishh ▼ QUE VOCÊ CIRCULOU - SÓ MENU */}
       <div className="mx-auto max-w- flex justify-end px-4 pt-2 pb-2">
         <button onClick={() => setMenuOpen(true)} className="p-2"><Menu className="w-6 h-6 text-white" /></button>
       </div>
@@ -207,10 +219,9 @@ export default function ProfilePage() {
       )}
 
       <div className="mx-auto max-w- px-4 pb-20">
-        {/* AVATAR DIMINUIDO DE 150px PRA 72px */}
         <div className="flex gap-5 items-center mt-2">
           <div className="relative shrink-0">
-            <button onClick={() => profile.avatar_url && setShowAvatarModal(true)} className="block h-[100px] w-[100px] rounded-full overflow-hidden bg-[#1d1d1d] border border-[#262626]">
+            <button onClick={() => profile.avatar_url && setShowAvatarModal(true)} className="block h-24 w-24 rounded-full overflow-hidden bg-[#1d1d1d] border border-[#262626]">
               {profile.avatar_url? <img src={profile.avatar_url} alt={profile.username} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-xl text-[#a8a8a8]">{profile.username?.[0]?.toUpperCase()}</div>}
             </button>
             {profile.is_verified && <VerifiedBadge className="absolute -bottom-1 -right-1 scale-90" />}
@@ -253,7 +264,6 @@ export default function ProfilePage() {
           <button onClick={shareProfile} className="flex-1 h- rounded-lg bg-[#262626] text- font-bold text-white active:scale-[0.98]">Compartilhar perfil</button>
         </div>
 
-        {/* SÓ O CONTADOR EM LARANJADO DESTACADO */}
         <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#ff6a00] px-3.5 py-1.5 shadow-[0_0_12px_rgba(255,106,0,0.3)]">
           <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20">
             <Heart className="w-3 h-3 text-white fill-white" />
