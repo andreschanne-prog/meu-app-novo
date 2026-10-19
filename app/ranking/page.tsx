@@ -1,11 +1,15 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
+import Link from 'next/link' // <-- ADICIONA ISSO
 import AppShell from '@/components/AppShell'
 import { supabase } from '@/lib/supabase'
 import { Trophy, MapPin, ChevronDown, Search, X, Globe, Check, ArrowDown } from 'lucide-react'
 import { VerifiedBadge } from '@/components/VerifiedBadge'
 import OnlineBadge from '@/components/OnlineBadge'
 import { isUserOnline } from '@/hooks/usePresence'
+import AvisoUsuario from '@/components/AvisoUsuario'
+// ...
+<AvisoUsuario />
 
 type Item = {
   user_id: string
@@ -166,19 +170,24 @@ export default function RankingPage() {
           else if (i === 1) medalhaClasse = 'border-[#C0C0C0] shadow-[0_0_12px_rgba(192,192,192,0.18)]'
           else if (i === 2) medalhaClasse = 'border-[#CD7F32] shadow-[0_0_12px_rgba(205,127,50,0.18)]'
           return (
-            <li key={it.user_id} className={`relative p-3 rounded-2xl flex items-center gap-3 border ${medalhaClasse}`}>
+            <li key={it.user_id} className={`relative p-3 rounded-2xl flex items-center gap-3 border ${medalhaClasse} hover:bg-[#141414] transition-colors`}>
               {i < 3 && <div className="absolute inset-0 rounded-2xl bg-[#0a0a0a] pointer-events-none" />}
               <div className="relative z-10 w-9 flex items-center justify-center shrink-0"><Medalha posicao={i + 1} /></div>
-              <div className="relative z-10 shrink-0">
-                <div className={`w-11 h-11 rounded-full bg-[#262626] overflow-hidden ${it.verificado? 'ring-2 ring-[#D4AF37] ring-offset-2 ring-offset-[#0a0a0a]' : ''}`}>
+              
+              {/* AVATAR CLICÁVEL */}
+              <Link href={`/profile/${it.username}`} className="relative z-10 shrink-0 group">
+                <div className={`w-11 h-11 rounded-full bg-[#262626] overflow-hidden ${it.verificado? 'ring-2 ring-[#D4AF37] ring-offset-2 ring-offset-[#0a0a0a]' : ''} group-hover:opacity-80 transition-opacity`}>
                   {it.avatar_url? <img src={it.avatar_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#a8a8a8] text-sm">{(it.full_name || it.username)?.[0]?.toUpperCase()}</div>}
                 </div>
                 {isUserOnline(it) &&!it.verificado && <OnlineBadge size={12} />}{it.verificado && <div className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={16} /></div>}
-              </div>
-              <div className="relative z-10 flex-1 min-w-0">
-                <div className="text-sm truncate text-white">{it.full_name || it.username}</div>
+              </Link>
+
+              {/* NOME CLICÁVEL */}
+              <Link href={`/profile/${it.username}`} className="relative z-10 flex-1 min-w-0 group">
+                <div className="text-sm truncate text-white group-hover:underline group-hover:text-[#D4AF37] transition-colors">{it.full_name || it.username}</div>
                 <div className="text- text-[#a8a8a8] truncate">{it.city} · {it.state}</div>
-              </div>
+              </Link>
+
               <div className="relative z-10 text-white text-sm shrink-0">{it.total_likes}</div>
             </li>
           )

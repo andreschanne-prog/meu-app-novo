@@ -53,7 +53,6 @@ export default function ProfilePage() {
     const mappedPosts = (ps || []).map((p: any) => ({...p, profiles: prof, like_count: p.likes?.[0]?.count?? 0 }))
     setPosts(mappedPosts)
 
-    // CORREÇÃO: conta likes que você GANHOU (nos seus posts)
     const postIds = mappedPosts.map((p: any) => p.id)
     if (postIds.length > 0) {
       const { count: likesRecebidos } = await supabase
@@ -219,41 +218,43 @@ export default function ProfilePage() {
       )}
 
       <div className="mx-auto max-w- px-4 pb-20">
-        <div className="flex gap-5 items-center mt-2">
-          <div className="relative shrink-0">
+        {/* ===== NOVO LAYOUT CENTRALIZADO ===== */}
+        <div className="flex flex-col items-center mt-2">
+          <div className="relative">
             <button onClick={() => profile.avatar_url && setShowAvatarModal(true)} className="block h-24 w-24 rounded-full overflow-hidden bg-[#1d1d1d] border border-[#262626]">
               {profile.avatar_url? <img src={profile.avatar_url} alt={profile.username} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center text-xl text-[#a8a8a8]">{profile.username?.[0]?.toUpperCase()}</div>}
             </button>
             {profile.is_verified && <VerifiedBadge className="absolute -bottom-1 -right-1 scale-90" />}
           </div>
-          <div className="flex flex-1 justify-between text-center">
+
+          <div className="flex w-full max-w-[300px] justify-between text-center mt-5">
             <div className="flex flex-col items-center"><span className="text- font-bold text-white leading-none">{postsComFoto.length}</span><span className="text- text-white mt-1">posts</span></div>
             <button onClick={async()=>{ setShowFollowers(true); await loadFollowers()}} className="flex flex-col items-center"><span className="text- font-bold text-white leading-none">{followers}</span><span className="text- text-white mt-1">seguidores</span></button>
             <button onClick={async()=>{ setShowFollowing(true); await loadFollowing()}} className="flex flex-col items-center"><span className="text- font-bold text-white leading-none">{following}</span><span className="text- text-white mt-1">seguindo</span></button>
           </div>
         </div>
 
-        <div className="mt-4">
-          <div className="flex items-center gap-1.5">
-            <h2 className="text- font-bold text-white">{profile.full_name || 'Mishh'}</h2>
+        <div className="mt-5 w-full">
+          <div className="flex items-center justify-center gap-1.5">
+            <h2 className="text- font-bold text-white text-center">{profile.full_name || 'Mishh'}</h2>
             {profile.is_online && <OnlineBadge />}
           </div>
-          {profile.bio && <p className="mt-1 text- text-white leading- whitespace-pre-wrap">{profile.bio}</p>}
-          {locationText && <div className="mt-1 flex items-center gap-1 text- text-white"><MapPin className="w-3.5 h-3.5" />{locationText}</div>}
+          {profile.bio && <p className="mt-2 text- text-white leading- whitespace-pre-wrap text-center">{profile.bio}</p>}
+          {locationText && <div className="mt-1 flex items-center justify-center gap-1 text- text-white"><MapPin className="w-3.5 h-3.5" />{locationText}</div>}
           {profile.relationship_status && (
-            <div className="mt-1 flex items-center gap-1.5 text- text-white">
+            <div className="mt-1 flex items-center justify-center gap-1.5 text- text-white">
               <Heart className="w-3.5 h-3.5 fill-[#ff4d6d] text-[#ff4d6d]" />
               <span>{RELATIONSHIP_LABELS[profile.relationship_status]}</span>
               {profile.relationship_with && <button onClick={() => goToPartner(profile.relationship_with)} className="font-bold hover:underline">@{profile.relationship_with}</button>}
             </div>
           )}
-          <div className="mt-1 flex items-center gap-1.5">
+          <div className="mt-1 flex items-center justify-center gap-1.5">
             <Link2 className="w-3.5 h-3.5 text-white" />
             <a href="https://mishh.vercel.app" target="_blank" className="text- font-bold text-[#0095f6]">mishh.vercel.app</a>
           </div>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-4 flex justify-center">
           <button className="h- px-3 rounded-full bg-[#1a1a1a] border border-[#262626] text- font-semibold text-white flex items-center gap-1">
             <Plus className="w-4 h-4" /> Adicionar banners
           </button>
@@ -264,13 +265,15 @@ export default function ProfilePage() {
           <button onClick={shareProfile} className="flex-1 h- rounded-lg bg-[#262626] text- font-bold text-white active:scale-[0.98]">Compartilhar perfil</button>
         </div>
 
-        <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#ff6a00] px-3.5 py-1.5 shadow-[0_0_12px_rgba(255,106,0,0.3)]">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20">
-            <Heart className="w-3 h-3 text-white fill-white" />
+        <div className="mt-4 flex justify-center">
+          <div className="inline-flex items-center gap-2 rounded-full bg-[#ff6a00] px-3.5 py-1.5 shadow-[0_0_12px_rgba(255,106,0,0.3)]">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20">
+              <Heart className="w-3 h-3 text-white fill-white" />
+            </div>
+            <span className="text- font-bold tracking-wide text-white">
+              {totalLikes.toLocaleString('pt-BR')} curtidas totais
+            </span>
           </div>
-          <span className="text- font-bold tracking-wide text-white">
-            {totalLikes.toLocaleString('pt-BR')} curtidas totais
-          </span>
         </div>
 
         <div className="mt-6 border-t border-[#262626] flex">

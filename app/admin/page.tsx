@@ -170,7 +170,8 @@ export default function AdminPage() {
         <button onClick={()=>setTab('requests')} className={`px-4 py-2 rounded-full text-xs ${tab==='requests'?'bg-white text-black':'bg-[#262626] text-white'}`}>Pedidos {requests.length>0? `(${requests.length})` : ''}</button>
         <button onClick={()=>setTab('destaques')} className={`px-4 py-2 rounded-full text-xs ${tab==='destaques'?'bg-[#ff6a00] text-white':'bg-[#262626] text-white'}`}>Destaques</button>
         <button onClick={()=>setTab('denuncias')} className={`px-4 py-2 rounded-full text-xs ${tab==='denuncias'?'bg-red-600 text-white':'bg-[#262626] text-white'}`}>🚨 Denúncias {denuncias.length>0? `(${denuncias.length})` : ''}</button>
-        <Link href="/admin/top-estados" className="px-4 py-2 rounded-full text-xs bg-[#ff6a00] text-white font-medium">🗺️ Top por Estado</Link>
+        <Link href="/admin/avisos" className="px-4 py-2 rounded-full text-xs bg-yellow-400 text-black font-bold hover:bg-yellow-300 transition">🔔 Avisar Usuários</Link>
+        <Link href="/admin/top-estados" className="px-4 py-2 rounded-full text-xs bg-[#ff6a00] text-white font-medium">🗺 Top por Estado</Link>
       </div>
 
       {tab === 'stats' && (
@@ -242,12 +243,12 @@ export default function AdminPage() {
 
       {tab === 'verified' && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between mb-2"><p className="text-xs uppercase text-[#a8a8a8]">Usuários verificados</p><span className="px-2 py-1 rounded-full bg-[#D4AF37] text-black text-[10px] font-bold">{verifiedUsers.length} ativos</span></div>
+          <div className="flex items-center justify-between mb-2"><p className="text-xs uppercase text-[#a8a8a8]">Usuários verificados</p><span className="px-2 py-1 rounded-full bg-[#D4AF37] text-black text- font-bold">{verifiedUsers.length} ativos</span></div>
           {verifiedUsers.length === 0 && (<div className="bg-[#0a0a0a] border border-[#262626] rounded-2xl p-8 text-center text-sm text-[#666]">Nenhum usuário verificado no momento.</div>)}
           {verifiedUsers.map((u: any) => (
             <div key={u.id} className="bg-[#0a0a0a] p-3 rounded-2xl border border-[#262626] flex justify-between items-center gap-3">
-              <div className="flex items-center gap-3 min-w-0"><img src={u.avatar_url || ''} className="h-10 w-10 rounded-full bg-[#222] object-cover" alt="" /><div className="min-w-0"><p className="text-sm text-white truncate">@{u.username} <span className="text-[#D4AF37]">✔</span></p><p className="text-[11px] text-[#777] truncate">{u.full_name || 'Sem nome'} · {u.city || 'sem cidade'}/{u.state || '?'}</p></div></div>
-              <div className="flex gap-1 flex-wrap justify-end"><button onClick={()=>toggleVerify(u.id, Boolean(u.verificado || u.is_verified))} className="text-[11px] px-3 py-1.5 rounded-full bg-[#D4AF37] text-black">Remover selo</button><button onClick={()=>suspend(u.id, u.is_suspended)} className={`text-[11px] px-3 py-1.5 rounded-full ${u.is_suspended?'bg-green-900 text-green-300':'bg-yellow-900/50 text-yellow-300'}`}>{u.is_suspended?'Reativar':'Suspender'}</button></div>
+              <div className="flex items-center gap-3 min-w-0"><img src={u.avatar_url || ''} className="h-10 w-10 rounded-full bg-[#222] object-cover" alt="" /><div className="min-w-0"><p className="text-sm text-white truncate">@{u.username} <span className="text-[#D4AF37]">✔</span></p><p className="text- text-[#777] truncate">{u.full_name || 'Sem nome'} · {u.city || 'sem cidade'}/{u.state || '?'}</p></div></div>
+              <div className="flex gap-1 flex-wrap justify-end"><button onClick={()=>toggleVerify(u.id, Boolean(u.verificado || u.is_verified))} className="text- px-3 py-1.5 rounded-full bg-[#D4AF37] text-black">Remover selo</button><button onClick={()=>suspend(u.id, u.is_suspended)} className={`text- px-3 py-1.5 rounded-full ${u.is_suspended?'bg-green-900 text-green-300':'bg-yellow-900/50 text-yellow-300'}`}>{u.is_suspended?'Reativar':'Suspender'}</button></div>
             </div>
           ))}
         </div>
