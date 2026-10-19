@@ -193,7 +193,13 @@ export default function NotificationsPage() {
                   n.is_read ? 'bg-[#0a0a0a] hover:bg-[#1a1a1a]' : 'bg-[#262626] hover:bg-[#404040]'
                 )}
               >
-                <div className="relative shrink-0">
+                <div 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if(n.actor?.id) router.push(`/user/${n.actor.id}`) 
+                  }} 
+                  className="relative shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                >
                   <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-[#0a0a0a] overflow-hidden ${n.actor?.verificado ? 'ring-2 ring-[#D4AF37] ring-offset-2 ring-offset-[#0a0a0a]' : ''}`}>
                     {n.actor?.avatar_url && <img src={n.actor.avatar_url} alt="" className="w-full h-full object-cover" />}
                   </div>

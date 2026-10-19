@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
-import Link from 'next/link' // <-- ADICIONA ISSO
+import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import { supabase } from '@/lib/supabase'
 import { Trophy, MapPin, ChevronDown, Search, X, Globe, Check, ArrowDown } from 'lucide-react'
@@ -8,8 +8,6 @@ import { VerifiedBadge } from '@/components/VerifiedBadge'
 import OnlineBadge from '@/components/OnlineBadge'
 import { isUserOnline } from '@/hooks/usePresence'
 import AvisoUsuario from '@/components/AvisoUsuario'
-// ...
-<AvisoUsuario />
 
 type Item = {
   user_id: string
@@ -101,7 +99,7 @@ export default function RankingPage() {
       setItems((data || []).slice(0, limit))
       setLoading(false)
     }
-    run()
+    if (myCtx) run()
   }, [scope, myCtx.country, myCtx.state, myCtx.city, selectedUF, selectedCity])
 
   const filteredStates = useMemo(() => ESTADOS_BRASIL.filter((e) => e.nome.toLowerCase().includes(searchState.toLowerCase()) || e.uf.toLowerCase().includes(searchState.toLowerCase())), [searchState])
@@ -109,7 +107,9 @@ export default function RankingPage() {
 
   return (
     <AppShell>
-      <h2 className="text-xl sm:text-2xl font-light mb-6 flex items-center gap-2 text-white tracking-wide"><Trophy className="text-white w-5 h-5 sm:w-6 sm:h-6" />Ranking</h2>
+      <h2 className="text-xl sm:text-2xl font-light mb-4 flex items-center gap-2 text-white tracking-wide"><Trophy className="text-white w-5 h-5 sm:w-6 sm:h-6" />Ranking</h2>
+
+      <AvisoUsuario />
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar mb-4 -mx-2 px-2">
         <button onClick={() => setScope('world')} className={`px-4 py-2 rounded-full text-sm whitespace-nowrap shrink-0 flex items-center gap-1.5 ${scope === 'world'? 'bg-white text-black' : 'bg-[#262626] text-white'}`}><Globe className="w-3.5 h-3.5" /> Mundo</button>
@@ -173,21 +173,16 @@ export default function RankingPage() {
             <li key={it.user_id} className={`relative p-3 rounded-2xl flex items-center gap-3 border ${medalhaClasse} hover:bg-[#141414] transition-colors`}>
               {i < 3 && <div className="absolute inset-0 rounded-2xl bg-[#0a0a0a] pointer-events-none" />}
               <div className="relative z-10 w-9 flex items-center justify-center shrink-0"><Medalha posicao={i + 1} /></div>
-              
-              {/* AVATAR CLICÁVEL */}
-              <Link href={`/profile/${it.username}`} className="relative z-10 shrink-0 group">
+              <Link href={`/user/${it.user_id}`} className="relative z-10 shrink-0 group">
                 <div className={`w-11 h-11 rounded-full bg-[#262626] overflow-hidden ${it.verificado? 'ring-2 ring-[#D4AF37] ring-offset-2 ring-offset-[#0a0a0a]' : ''} group-hover:opacity-80 transition-opacity`}>
                   {it.avatar_url? <img src={it.avatar_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#a8a8a8] text-sm">{(it.full_name || it.username)?.[0]?.toUpperCase()}</div>}
                 </div>
                 {isUserOnline(it) &&!it.verificado && <OnlineBadge size={12} />}{it.verificado && <div className="absolute -bottom-0.5 -right-0.5"><VerifiedBadge size={16} /></div>}
               </Link>
-
-              {/* NOME CLICÁVEL */}
-              <Link href={`/profile/${it.username}`} className="relative z-10 flex-1 min-w-0 group">
+              <Link href={`/user/${it.user_id}`} className="relative z-10 flex-1 min-w-0 group">
                 <div className="text-sm truncate text-white group-hover:underline group-hover:text-[#D4AF37] transition-colors">{it.full_name || it.username}</div>
                 <div className="text- text-[#a8a8a8] truncate">{it.city} · {it.state}</div>
               </Link>
-
               <div className="relative z-10 text-white text-sm shrink-0">{it.total_likes}</div>
             </li>
           )
